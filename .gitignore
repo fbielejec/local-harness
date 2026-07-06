@@ -1,0 +1,8 @@
+# eval outputs / run artifacts
+evals/results/
+runs/
+
+# python
+__pycache__/
+*.pyc
+.venv/

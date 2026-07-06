@@ -2,7 +2,10 @@
 
 Autonomously tune the `llama-server` serving configuration to **maximize inference
 throughput** for `Qwen3-Coder-30B-A3B-Instruct` on the remote box `weebeastie`
-(192.168.1.22), without degrading model quality or breaking tool-calling.
+(192.168.1.22), **without degrading measured coding quality** or breaking tool-calling.
+
+Quality is now a **measured hard gate** (not just the artichoke test) — see `evals/` and
+`docs/plans/2026-07-06-quality-gated-autoperf-design.md`.
 
 ## Setup
 
@@ -42,27 +45,46 @@ Report columns: `pp<N>` (prefill t/s) and `tg<N> @ d<depth>` (generation t/s at 
 Confirm VRAM with a parallel `nvidia-smi` while a server (not bench) runs the config, since
 bench and server memory use differ slightly — the **server** must stay under 4 GB.
 
+## Experiment driver 2 — the quality gate (`evals/`)
+
+Shrinking a quant or KV type can degrade coding ability, and the **artichoke test alone is
+too weak** to catch that. Quality is now a **measured hard gate**, adapted from Raschka's
+`local-coding-agent-evals` (see the design doc + `evals/README.md`):
+
+- **Reasoning bench** (`evals/reasoning/reasoning_bench.py`) — 5 one-shot tool-choice tasks,
+  substring-graded, bit-deterministic at temp 0. **Fast (~1 min)** → run on every tg-winner.
+  Baseline `Q4_K_M` = **1.00/5**. Emits `QUALITY_REASONING total=<X>/5 …`. (Low absolute
+  score = floor effect; treat it as a *tripwire* for broken/regressed quants, not a fine meter.)
+- **Agent-pack** (`evals/agent_pack_runner.sh`) — 5 buggy repos fixed by the real `qwen`
+  agent, graded by `pytest`. **Slow (~1–1.5 h)** → baseline + finalist only. Baseline
+  `Q4_K_M` = **5/5** (needs `qwen --yolo`, else edits are approval-blocked). Emits
+  `QUALITY_AGENTPACK passed=<n>/5`.
+
+Both run against a **server already up** on the config under test (tunnel open):
+`evals/quality_gate.sh <label>` (reasoning) · `evals/quality_gate.sh <label> --full` (+ agent-pack).
+
 ## Scoring rule
 
 **Primary metric: `tg@16384`** — generation t/s at 16k KV depth. This is what the agent
 actually feels per turn once the cache is warm.
 
-A config **beats baseline iff `tg@16384` is strictly higher**, subject to ALL guardrails:
+A config is **kept iff `tg@16384` is strictly higher than the current best**, subject to ALL
+guardrails:
 
-- **VRAM:** the *server* launched on this config must load with `nvidia-smi` memory.used
-  ≤ 3900 MiB (leave headroom; OOM = automatic reject).
-- **Prefill floor:** `pp2048` must not drop below **60 t/s** (first-turn latency guard).
-- **Quality floor:** model quant ≥ **IQ4_XS / Q4_0** equivalent. Never go to Q3/Q2 — they
-  wreck coding ability. Any quant change is a *provisional* win until human-verified.
-- **Tool-calling intact:** after keeping any config that changes quant, KV type, or the
-  offload split, relaunch the server + tunnel and run the `qwen` artichoke test
-  (`CLAUDE.md`). It must still make a `read_file` call and answer "artichoke". If it breaks,
-  revert regardless of tok/s.
+- **VRAM:** the *server* on this config must load with `nvidia-smi` memory.used ≤ 3900 MiB
+  (OOM = automatic reject).
+- **Prefill floor:** `pp2048@d16384` must not drop materially below baseline (**~53.6 t/s**).
+  (This is steady-state prefill *at 16k depth* — lower than the ~86 t/s from-zero average the
+  original "60 t/s" floor was calibrated to; that literal floor would reject the baseline.)
+- **Quant floor:** quant ≥ **IQ4_XS / Q4_0**. Never Q3/Q2 — they wreck coding ability.
+- **Quality gate (measured):** reasoning `total`/5 **≥ baseline** on every tg-winner;
+  agent-pack `passed`/5 **≥ baseline** on the finalist. Any regression → **reject regardless
+  of tok/s**. (Replaces the artichoke-only check; artichoke stays as a liveness sanity check.)
 
 Tie-break equal `tg@16384` by higher `pp2048`, then lower VRAM.
 
-Record every run (win or loss) to `results.tsv` (create it; columns:
-`n	config	pp2048	tg128@16k	vram_mib	kept	notes`).
+Record every run to `results.tsv` (columns:
+`n	config	pp2048	tg128@16k	vram_mib	reason_5	apack_5	kept	notes`).
 
 ## What you CAN change
 
@@ -109,19 +131,30 @@ Server / bench parameters:
 
 ## Experiment loop
 
-LOOP until the human interrupts:
+`llama-bench` needs the model free (**server DOWN**); the quality gate needs the **server UP**.
+The loop alternates phases.
+
+**Phase 0 (once): baselines.** Server up on `Q4_K_M` → `evals/quality_gate.sh baseline --full`
+→ record reasoning + agent-pack baseline. `tg` baseline already measured (8.38).
+
+**LOOP until the human interrupts:**
 
 1. Pick a hypothesis (priors above, highest-leverage untried first).
-2. Stop the server. Run `llama-bench` with the config under test (`-r 3` for stable numbers).
-3. Append the row to `results.tsv`.
-4. If `tg@16384` strictly beats the current best AND all guardrails hold → provisional keep.
-   Else → discard, next hypothesis.
-5. On a provisional keep that changed quant / KV / offload: launch the **server** on it,
-   check VRAM ≤ 3900 MiB, open the tunnel, run the `qwen` artichoke test. Pass → confirmed
-   best. Fail (VRAM/quality/tool-calling) → revert to prior best.
-6. Every 5th experiment, try a **simplification** (remove a flag: drop `-fa`, drop KV quant,
-   fewer threads) — if tok/s holds, keep the simpler config.
-7. Repeat.
+2. **Throughput screen (server down).** Stop the server; `llama-bench` the config at
+   `-d 16384` (`-r 2` to screen, `-r 3` to confirm). Append the row to `results.tsv`.
+3. If `tg@16384` does **not** strictly beat the best, or VRAM/prefill/quant guardrails fail →
+   discard, next hypothesis.
+4. **Fast quality gate (server up).** Launch the server on the config, confirm VRAM ≤ 3900,
+   open the tunnel, run `evals/quality_gate.sh <label>` (reasoning). If reasoning `total` <
+   baseline → reject (quality regression), revert. Else → **provisional keep** (new best).
+5. Every 5th experiment, try a **simplification** (drop a flag: `-fa`, KV quant, fewer
+   threads) — keep the simpler config if `tg` holds and quality doesn't regress.
+6. Repeat.
+
+**Finalist bless.** When the loop converges (proven ceiling / out of priors / interrupt), run
+the **agent-pack** on the current best (`evals/quality_gate.sh <best> --full`). If
+`passed`/5 ≥ baseline → confirmed; update `CLAUDE.md` launch line + `README.md`. Else → revert
+to the prior confirmed best and re-bless.
 
 **Timeout:** a single `llama-bench` run should finish in a few minutes. If a config hangs or
 a download stalls > 15 min, kill it and move on.
