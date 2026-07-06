@@ -9,8 +9,10 @@ throughput** for `Qwen3-Coder-30B-A3B-Instruct` on the remote box `weebeastie`
 Read `CLAUDE.md` first (hardware, stack, how to operate the server, prior findings).
 
 You operate across two machines:
-- **laptop (here):** run `qwen` to verify tool-calling; edit these docs; hold the results log.
-- **remote (`ssh filip@192.168.1.22`):** kill/restart `llama-server`, run `llama-bench`,
+- **laptop (here):**
+  - In the ~/qwen-scratch directory run `qwen -p "Use your tools to read notes.txt in the current directory and tell me the secret word."` to verify tool-calling;
+  - Edit the docs in the project directory; hold the results log.
+- **remote (`ssh filip@192.168.1.22`):** kill/restart `llama-server` with different parameters, run `llama-bench`,
   read `~/llama-server.log`, check `nvidia-smi`.
 
 The model weights are cached at `remote:~/models/` (find the exact `.gguf` with

@@ -1,0 +1,2 @@
+n	config	pp2048	tg128@16k	vram_mib	kept	notes
+0	D4 Q4_K_M ngl99 cpu-moe KVq8_0 t10	53.58	8.38	2861*	baseline	reference; llama-bench pp/tg @ d16384 r3; *VRAM from D1 server 32k ctx
