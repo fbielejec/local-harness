@@ -102,10 +102,28 @@ export OPENAI_MODEL="qwen3-coder-30b-a3b-instruct"
   exfiltrate, but agent-executed commands can.
 - **Later:** the all-on-remote topology makes the remote a real sandbox.
 
+## Household chat frontend (Phase F — after the harness works)
+
+A LAN-accessible ChatGPT-like UI for household users (e.g. spouse), reusing the same
+`llama-server` backend. **Open WebUI** in Docker, LAN-exposed on fixed port 3000, talking
+to `llama-server` over host loopback:
+
+```
+home devices ──▶ 192.168.1.22:3000  Open WebUI (login wall)  ──▶ 127.0.0.1:8080  llama-server (loopback-only)
+```
+
+Security property: `llama-server` stays bound to loopback — **never on the LAN**. Only
+Open WebUI (which has user accounts + login) is LAN-reachable. Wiring: run the container
+with `--network host` + `-e PORT=3000` so it reaches `127.0.0.1:8080` (bridge networking's
+`host.docker.internal` → 172.17.0.1 would NOT reach a loopback-bound server — the gotcha).
+First account = admin. Caveat: single CPU-bound model — concurrent chats contend, fine for
+bursty household use, not multi-tenant.
+
 ## Out of scope (YAGNI)
 
-No multi-model router, no Ollama registry, no web UI, no fine-tuning, no containerized
-agent (yet). One model, one endpoint, one harness; manual first, then systemd.
+No multi-model router, no Ollama registry, no fine-tuning, no containerized *agent* (yet).
+One model, one `llama-server` endpoint serving both the coding harness and the chat
+frontend; manual first, then systemd.
 
 ## Setup runbook
 
