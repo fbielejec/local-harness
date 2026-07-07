@@ -29,7 +29,7 @@ laptop (this machine)                         remote: weebeastie 192.168.1.22
 |-------|----------|
 | llama.cpp (built, CUDA 12.6, sm_61) | remote `~/Programs/llama.cpp`, binaries in `build/bin/` |
 | Model weights (GGUF, via `-hf` cache) | remote `~/models/` (`export LLAMA_CACHE=$HOME/models`) |
-| Model | `unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M` (~18.5 GB, MoE 30B total / ~3B active) |
+| Model | `unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:IQ4_XS` (~15.25 GiB, MoE 30B / ~3B active) — autoperf winner (2026-07-07); Q4_K_M was the prior default |
 | Server log | remote `~/llama-server.log` |
 | Qwen-Code scratch workspace | laptop `~/qwen-scratch` |
 
@@ -37,12 +37,14 @@ laptop (this machine)                         remote: weebeastie 192.168.1.22
 
 SSH: `ssh filip@192.168.1.22`
 
-**Current production launch (config "D4")** — CPU experts + GPU attention/KV, single warm slot:
+**Current production launch (config "IQ4_XS", 2026-07-07)** — CPU experts + GPU attention/KV,
+single warm slot. IQ4_XS is the autoperf winner: **+5% tg** vs the prior Q4_K_M "D4" at
+identical coding quality (agent-pack 5/5) and lower VRAM (2777 MiB):
 
 ```bash
 export LLAMA_CACHE=$HOME/models
 nohup ~/Programs/llama.cpp/build/bin/llama-server \
-  -hf unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M \
+  -hf unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:IQ4_XS \
   --host 127.0.0.1 --port 8080 \
   --threads 10 --parallel 1 --ctx-size 32768 \
   --n-gpu-layers 99 --cpu-moe \
@@ -60,7 +62,7 @@ Watch:   `tail -f ~/llama-server.log`   ·   VRAM: `nvidia-smi --query-gpu=memor
 ```bash
 cd ~/qwen-scratch
 export OPENAI_BASE_URL="http://localhost:8080/v1" OPENAI_API_KEY=dummy \
-       OPENAI_MODEL="unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M"
+       OPENAI_MODEL="unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:IQ4_XS"
 qwen -p "Use your tools to read notes.txt and tell me the secret word."   # expect: artichoke
 ```
 
@@ -78,11 +80,22 @@ qwen -p "Use your tools to read notes.txt and tell me the secret word."   # expe
   **one-time cost per server restart**; the warm cache persists across sessions.
 - `--threads-batch 20` did **not** help prefill. `-no-cnv` was removed from `llama-cli` in
   this build (use `llama-completion` for one-shot).
+- **Model quant is the ONLY throughput lever that moved tg** (autoperf 2026-07-07): IQ4_XS
+  (4.25 bpw, 15.25 GiB) is +5% over Q4_K_M at identical coding quality (agent-pack 5/5).
+  gen ∝ 1/expert-bytes, as expected for memory-bandwidth-bound expert reads. Q4_0 was +4.7%.
+- **What did NOT help tg@16k** (all measured at `-d 16384`, all ties within noise): KV quant
+  (q8_0→q4_0), partial expert offload (`--n-cpu-moe 44/46` — confirms the ping-pong), more
+  threads (t20), and **speculative decoding** (Qwen3-0.6B draft, vocab-compatible, on CPU:
+  8.76 vs 8.80 — MoE routing gives weak batch-amortization + only moderate general-draft
+  acceptance). The bottleneck is the irreducible per-token CPU expert read over ~45 GB/s RAM.
 
 ## Current goal
 
-**Improve tokens/s** (see `program.md`). Primary metric: generation t/s at ~16k context.
-Baseline (D4): pp ≈ 86 t/s, tg@16k ≈ 9 t/s, VRAM ≈ 2.9 GB.
+**Improve tokens/s** without degrading measured coding quality (see `program.md` + `evals/`).
+Primary metric: generation t/s at 16k context (`llama-bench -d 16384`).
+**Best: IQ4_XS** — tg@16k **8.80** (+5% vs Q4_K_M's 8.38), pp 54.95, VRAM 2777 MiB; quality
+preserved (reasoning 1.50/5 ≥ 1.00 baseline; agent-pack **5/5** = baseline). Full results in
+`results.tsv` + `docs/autoperf-reports/2026-07-06-autoperf-report.md`.
 
 ## TODOs
 
@@ -106,4 +119,7 @@ Running list of follow-ups (check off as done; newest at the bottom).
 
 - `README.md` — chronological runbook (every command run, with results).
 - `docs/plans/2026-07-06-local-coding-harness-design.md` — full design + rationale.
-- `program.md` — the autonomous tok/s optimization loop.
+- `docs/plans/2026-07-06-quality-gated-autoperf-design.md` — the quality-gated tuning loop.
+- `docs/autoperf-reports/2026-07-06-autoperf-report.md` — throughput + quality tuning results.
+- `evals/` — coding-quality gate (reasoning + agent-pack; methodology adapted from Raschka).
+- `program.md` — the autonomous, quality-gated tok/s optimization loop.

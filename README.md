@@ -1,343 +1,218 @@
 # Local Agentic Coding Harness
 
-Setup log for running an open-weights coding agent locally.
-Design: [`docs/plans/2026-07-06-local-coding-harness-design.md`](docs/plans/2026-07-06-local-coding-harness-design.md).
+A self-hosted agentic coding setup: an open-weights coding model served locally by
+**llama.cpp**, driven by the **Qwen-Code** CLI over an SSH tunnel. Motivation is
+security / self-sovereignty — nothing leaves the local network.
 
-Stack: **Qwen3-Coder-30B-A3B-Instruct** (GGUF Q4_K_M) → **llama-server** on the remote →
-SSH tunnel → **Qwen-Code** harness on the laptop.
+**Current best on this box:** `Qwen3-Coder-30B-A3B-Instruct` **IQ4_XS** → `tg@16k` ≈ 8.8 t/s,
+VRAM ≈ 2.8 GB on a **GTX 1050 Ti (4 GB) + i9-10850K**. How that was tuned:
+`docs/autoperf-reports/`; design + rationale: `docs/plans/`.
 
-## Access to the remote machine
-
-```bash
-ssh filip@192.168.1.22
 ```
+client machine (laptop)                    server machine (e.g. weebeastie, 192.168.1.22)
+  Qwen-Code CLI ──ssh tunnel──▶ localhost:8080 ──▶ llama-server (llama.cpp, CUDA)
+  your local git repos                              Qwen3-Coder-30B-A3B GGUF (IQ4_XS)
+```
+
+| machine | role |
+|---|---|
+| **server** | the GPU box — builds & runs `llama-server`, bound to `127.0.0.1` only |
+| **client** | your dev laptop — SSH tunnel + Qwen-Code + your git repos |
+
+The server never listens on the LAN; it is reached exclusively through the SSH tunnel.
 
 ---
 
-# Runbook (commands, in order)
+# Reproduce this setup
 
-Commands are logged here as we run them. `[remote]` = run on `weebeastie` (192.168.1.22);
-`[laptop]` = run on the dev machine.
+Commands are tagged `[server]` / `[client]`. The example host is `filip@192.168.1.22` —
+substitute your own throughout.
 
-## Phase A — Remote model server
+## 0. Prerequisites
 
-### A0 · Recon: what toolchain already exists  `[remote]`
+**Server** (the GPU box):
+- Linux with an NVIDIA GPU + working driver (`nvidia-smi` runs).
+- Build tools: `git`, `cmake` (≥3.18), a C/C++ compiler, `make`, `libcurl` dev headers.
+- **CUDA toolkit** (`nvcc`) ≥ 12.4 — install in step 1 if missing.
+- RAM ≥ ~20 GB (the MoE experts live in RAM) and ~16 GB free disk for the weights.
 
-```bash
-echo "=== git ==="; git --version 2>/dev/null || echo MISSING
-echo "=== cmake ==="; cmake --version 2>/dev/null | head -1 || echo MISSING
-echo "=== gcc ==="; gcc --version 2>/dev/null | head -1 || echo MISSING
-echo "=== make ==="; make --version 2>/dev/null | head -1 || echo MISSING
-echo "=== nvcc (CUDA toolkit) ==="; nvcc --version 2>/dev/null | tail -1 || echo MISSING
-echo "=== CUDA libs ==="; ls -d /usr/local/cuda* 2>/dev/null || echo "no /usr/local/cuda"
-echo "=== ccache ==="; ccache --version 2>/dev/null | head -1 || echo MISSING
-echo "=== curl dev ==="; dpkg -l | grep -E "libcurl4|libcurl.*dev" | awk '{print $2}' || echo none
-```
+**Client** (your laptop): SSH access to the server + **Node ≥ 20** with npm.
 
-_Result: git 2.43, cmake 3.28.3, gcc 13.3.0, make 4.3, ccache 4.9.1, libcurl4-gnutls-dev
-present. **CUDA toolkit MISSING** (driver 535 is installed, but no `nvcc`). → install it (A1)._
+> Sizing intuition: generation here is **memory-bandwidth-bound on the CPU-resident experts**;
+> the small GPU only accelerates attention + the KV cache. See *Adapting to different hardware*.
 
-### A1 · Install CUDA toolkit 12.6 (toolkit only, no driver)  `[remote]`
+## 1. [server] Build llama.cpp with CUDA
 
-gcc 13.3 requires CUDA ≥ 12.4, so we use NVIDIA's repo (Ubuntu's `nvidia-cuda-toolkit` is
-12.0 and rejects gcc 13). Installs to `/usr/local/cuda-12.6`; driver 535 untouched.
+If `nvcc` is missing, install the CUDA toolkit. This box is Ubuntu 24.04 → CUDA 12.6 (adjust the
+repo/version for your OS; you need ≥ 12.4 for gcc 13):
 
 ```bash
 cd /tmp
 wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
 sudo dpkg -i cuda-keyring_1.1-1_all.deb
-sudo apt update
-sudo apt install -y cuda-toolkit-12-6
-
-nvcc --version   # expect: release 12.6
+sudo apt update && sudo apt install -y cuda-toolkit-12-6
+echo 'export PATH=/usr/local/cuda-12.6/bin:$PATH' >> ~/.bashrc
+echo 'export LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+source ~/.bashrc && nvcc --version      # expect release ≥ 12.4
 ```
 
-Persist the env for future interactive shells (systemd services get it explicitly later, in E):
+Build. **Set `CMAKE_CUDA_ARCHITECTURES` to your GPU's compute capability** (61 Pascal /
+75 Turing / 86 Ampere / 89 Ada / 90 Hopper):
 
 ```bash
-grep -q 'cuda-12.6/bin' ~/.bashrc || cat >> ~/.bashrc <<'EOF'
-
-# CUDA 12.6 toolkit
-export PATH=/usr/local/cuda-12.6/bin:$PATH
-export LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:$LD_LIBRARY_PATH
-EOF
-
-source ~/.bashrc
-which nvcc          # expect: /usr/local/cuda-12.6/bin/nvcc
-nvcc --version      # expect: release 12.6
-```
-
-_Result: **CUDA 12.6.85 installed** and on PATH (`nvcc release 12.6, V12.6.85`)._
-
-### A2 · Build llama.cpp with CUDA (Pascal sm_61)  `[remote]`
-
-CUDA on, targeting the 1050 Ti's `sm_61`; FA-all-quants so quantized KV cache works;
-libcurl on for URL model pulls.
-
-```bash
-cd ~/Programs
-git clone https://github.com/ggml-org/llama.cpp
-cd llama.cpp
-
-cmake -B build \
-  -DGGML_CUDA=ON \
-  -DCMAKE_CUDA_ARCHITECTURES=61 \
-  -DGGML_CUDA_FA_ALL_QUANTS=ON \
-  -DLLAMA_CURL=ON
-
-cmake --build build --config Release -j$(nproc)   # ~15–25 min on 10 cores
-
-ls -lh ~/Programs/llama.cpp/build/bin/llama-server
+mkdir -p ~/Programs && cd ~/Programs
+git clone https://github.com/ggml-org/llama.cpp && cd llama.cpp
+# GGML_CUDA_FA_ALL_QUANTS = flash-attn for quantized KV; LLAMA_CURL = -hf model pulls
+cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=61 \
+      -DGGML_CUDA_FA_ALL_QUANTS=ON -DLLAMA_CURL=ON
+cmake --build build --config Release -j"$(nproc)"      # ~15-25 min
 ~/Programs/llama.cpp/build/bin/llama-server --version
 ```
 
-_Result: **built OK** — llama-server version 9886 (20a04b220), GNU 13.3.0. (CUDA-active
-check happens at first launch in A3.) Binary at `~/Programs/llama.cpp/build/bin/`._
+## 2. [server] Launch the model server (winning config)
 
-### A3a · Download model + first-token smoke test  `[remote]`
-
-Model: `unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M` (confirmed best-available GGUF,
-~18 GB). llama.cpp downloads it via `-hf` (LLAMA_CURL); cache pointed at `~/models`.
-This run is CPU-only (no `-ngl`) — just proves the model loads, generates, and the CUDA
-build sees the GPU.
+`-hf` downloads the GGUF (~16 GB) into `$LLAMA_CACHE` on first run. **IQ4_XS** is the
+quality-gated throughput winner here (Q4_K_M also works, ~5 % slower):
 
 ```bash
 mkdir -p ~/models
 export LLAMA_CACHE=$HOME/models
-
-# NOTE: build 9886 dropped `-no-cnv` from llama-cli; use `llama-completion` for one-shot.
-~/Programs/llama.cpp/build/bin/llama-completion \
-  -hf unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M \
-  -p "Say hello in exactly one word." -n 8
-```
-
-Expect: download bars → `ggml_cuda_init: found 1 CUDA devices: ... GTX 1050 Ti` → a word.
-
-_Result: **works** — downloaded, generated "Hello!". **Generation 23.4 t/s, prompt 51.7 t/s
-on pure CPU** (no `-ngl`) — beats the 8–15 t/s estimate. GPU offload deferred to Phase D.
-(Ran via llama-cli's interactive UI since `-no-cnv` is gone in this build; `llama-completion`
-is the correct one-shot binary.)_
-
-### A3b · Launch llama-server (CPU-first) + validate on remote  `[remote]`
-
-CPU-first to reach a working pipeline fast; GPU offload is Phase D. Loopback-only bind
-(reached via SSH tunnel), `--jinja` for Qwen-Code tool-calling. No api-key yet (Phase E).
-
-```bash
-export LLAMA_CACHE=$HOME/models
 nohup ~/Programs/llama.cpp/build/bin/llama-server \
-  -hf unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M \
-  --host 127.0.0.1 --port 8080 --threads 10 --ctx-size 32768 --jinja \
-  > ~/llama-server.log 2>&1 &
-
-tail -f ~/llama-server.log     # Ctrl-C once you see "server is listening"
-```
-
-Validate on the remote (same terminal):
-
-```bash
-curl -s http://127.0.0.1:8080/v1/models
-echo
-curl -s http://127.0.0.1:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"qwen","messages":[{"role":"user","content":"Reply with the single word: pong"}],"max_tokens":10}'
-```
-
-_Result: **Phase A ✅** — `/v1/models` lists the model (n_ctx served 32768, n_ctx_train
-**262144** = 256k native); chat completion returned "pong" at **46.8 t/s prompt /
-29.3 t/s gen**. Server running in background on the remote (`~/llama-server.log`)._
-
-## Phase B — SSH tunnel from the laptop + validate  `[laptop]`
-
-Backgrounded tunnel (`-fN` = no shell, background after auth). Maps laptop `localhost:8080`
-→ remote `127.0.0.1:8080`. Then curl from the laptop to prove the round-trip.
-
-```bash
-ssh -fN -L 8080:127.0.0.1:8080 filip@192.168.1.22
-
-curl -s http://localhost:8080/v1/models | head -c 200
-echo
-curl -s http://localhost:8080/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"qwen","messages":[{"role":"user","content":"Reply with: tunnel-ok"}],"max_tokens":10}'
-```
-
-To stop the tunnel later: `pkill -f "ssh -fN -L 8080"`.
-
-_Result: **Phase B ✅** — laptop `localhost:8080` reaches the remote model; returned
-"tunnel-ok". Full laptop→remote pipeline live._
-
-## Phase C — Qwen-Code harness  `[laptop]`
-
-Node CLI, needs Node ≥ 20. Model id must match what `/v1/models` reports.
-
-### C1 · Install
-
-```bash
-node --version     # need v20+
-npm --version
-npm install -g @qwen-code/qwen-code
-qwen --version
-```
-
-_Result: **installed** — Node v23.9.0, npm 10.9.2, qwen-code **0.19.6**._
-
-### C2 · Configure + tool-call milestone
-
-Scoped scratch workspace (not `$HOME`). Prove the full loop incl. tool-calling.
-
-```bash
-mkdir -p ~/qwen-scratch && cd ~/qwen-scratch
-printf 'The secret word is: artichoke.\n' > notes.txt
-
-export OPENAI_BASE_URL="http://localhost:8080/v1"
-export OPENAI_API_KEY="dummy"     # llama-server has no key; any value works
-export OPENAI_MODEL="unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M"
-
-qwen -p "Use your tools to read notes.txt in the current directory and tell me the secret word."
-```
-
-Success = a visible tool call (read_file) + answer "artichoke". This is the viability
-checkpoint (full loop incl. `--jinja` tool templating).
-
-_Result: **connects, but too slow to be usable on the A3b (CPU, 4-slot) server.** Server log
-showed the real problem: Qwen-Code sends a **~14,800-token** system+tools prompt, and (a)
-CPU prefill degrades 151→72 t/s over that length (~3 min to first token), and (b) with
-`--parallel 4` each turn landed on a **different cold slot → re-prefilled the whole 15k
-every turn**. → Bring Phase D forward: `--parallel 1` (warm cache) + GPU offload of
-attention/KV._
-
-## Phase D — Performance tuning (brought forward — required for usability)
-
-### D1 · Relaunch: single slot + MoE-aware GPU offload  `[remote]`
-
-`--parallel 1` = one warm slot so the 15k system prompt is prefilled once and reused across
-turns (the biggest win). `-ngl 99 --cpu-moe` = attention/KV/router on the 4 GB GPU, expert
-FFNs stay in RAM. `q8_0` KV cache + `-fa on` so 32k context fits in 4 GB. `--no-mmap` per
-the earlier perf warning.
-
-```bash
-pkill -f "build/bin/llama-server"
-sleep 2
-
-export LLAMA_CACHE=$HOME/models
-nohup ~/Programs/llama.cpp/build/bin/llama-server \
-  -hf unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M \
+  -hf unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:IQ4_XS \
   --host 127.0.0.1 --port 8080 \
-  --threads 10 \
-  --parallel 1 \
-  --ctx-size 32768 \
-  --n-gpu-layers 99 \
-  --cpu-moe \
-  -fa on \
-  --cache-type-k q8_0 --cache-type-v q8_0 \
-  --no-mmap \
-  --jinja \
-  > ~/llama-server.log 2>&1 &
-
-tail -f ~/llama-server.log
-nvidia-smi --query-gpu=memory.used,memory.total,utilization.gpu --format=csv
-```
-
-Target: `nvidia-smi` memory.used < ~3.9 GB. OOM → drop to `--ctx-size 24576` or `q4_0` KV.
-
-_Result: **fits** — `n_slots = 1`, VRAM **2861 / 4096 MiB** (~1.2 GB headroom), loaded in
-6.6 s. GPU offload live. (Headroom = room to push a few experts to GPU later via
-`--n-cpu-moe N<48`.) Re-testing harness in D2._
-
-### D2 · Re-test harness on the tuned server
-
-```bash
-cd ~/qwen-scratch
-qwen -p "Use your tools to read notes.txt in the current directory and tell me the secret word."
-# then a follow-up turn in the TUI to confirm warm-cache reuse:
-#   "Now tell me how many characters are in that word."
-```
-
-Watch `tail -f ~/llama-server.log`: compare prefill t/s vs the CPU run (151→72), and confirm
-the follow-up turn prefills only a few new tokens (not 15k).
-
-_Result: **mixed — two findings.** (1) ✅ `--parallel 1` cache reuse **works**: follow-up
-turn matched `sim 0.997`, prefilled only **55 tokens**, total **4.5s**. (2) ❌ GPU offload
-**backfired**: generation **29 → 8.7 t/s** (3.3× slower) from CPU↔GPU PCIe ping-pong (attn
-on GPU, MoE experts on CPU, every layer/token) — while prefill barely moved (~86 t/s).
-First-turn prefill of the 16k prompt still ~190s. **Conclusion: CPU-only wins for this MoE;
-the 4 GB Pascal can't hold experts, so offload is a net loss.** → D3 reverts GPU, keeps
-`--parallel 1`, adds `--threads-batch 20` to speed prefill._
-
-### D3 · CPU-only + single slot + fast-prefill threads  `[remote]`
-
-No GPU (offload hurts this MoE). `--threads-batch 20` = all logical cores for compute-bound
-prefill; `--threads 10` = physical cores for memory-bound generation. f16 KV cache (plenty
-of RAM). Keep `--parallel 1` for warm-cache reuse.
-
-```bash
-pkill -f "build/bin/llama-server"
-sleep 2
-
-export LLAMA_CACHE=$HOME/models
-nohup ~/Programs/llama.cpp/build/bin/llama-server \
-  -hf unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M \
-  --host 127.0.0.1 --port 8080 \
-  --threads 10 \
-  --threads-batch 20 \
-  --parallel 1 \
-  --ctx-size 32768 \
-  --no-mmap \
-  --jinja \
-  > ~/llama-server.log 2>&1 &
-```
-
-Compare: generation ~29 t/s (vs 8.7), prefill hopefully > 90 t/s, follow-ups reuse cache.
-
-_Result: **REVERSED the D2 conclusion — GPU offload actually wins.** CPU-only gen @16k ctx
-was **3.07 t/s** vs GPU offload's **8.7 t/s** — the earlier "29 t/s" was at ~0 context, not
-comparable. At real (16k) context the bottleneck is attention-over-KV, which the GPU
-accelerates. `--threads-batch 20` did NOT help prefill (85.9 vs 86.5). → Revert to the GPU
-config (D1) as production; see D4._
-
-### D4 · Production config = GPU offload (corrected)  `[remote]`
-
-At working context the GPU offload gives ~2.8× generation vs CPU-only. This is the config
-to keep. Remaining issue: ~190s **one-time** first-turn prefill of Qwen-Code's ~16k prompt
-(cache then persists across sessions until evicted).
-
-```bash
-pkill -f "build/bin/llama-server"
-sleep 2
-
-export LLAMA_CACHE=$HOME/models
-nohup ~/Programs/llama.cpp/build/bin/llama-server \
-  -hf unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:Q4_K_M \
-  --host 127.0.0.1 --port 8080 \
-  --threads 10 \
-  --parallel 1 \
-  --ctx-size 32768 \
+  --threads 10 --parallel 1 --ctx-size 32768 \
   --n-gpu-layers 99 --cpu-moe \
   -fa on --cache-type-k q8_0 --cache-type-v q8_0 \
   --no-mmap --jinja \
   > ~/llama-server.log 2>&1 &
+
+tail -f ~/llama-server.log      # wait for "listening on http://127.0.0.1:8080" (~17 s)
+nvidia-smi --query-gpu=memory.used,memory.total --format=csv   # expect < 3900 MiB
 ```
 
-Perf @16k ctx: prefill ~86 t/s (first turn ~190s, one-time), gen ~9 t/s, follow-ups reuse
-cache (~seconds). VRAM ~2.9 GB.
+What the flags do (why → *Why these choices*):
 
-_Result: (pending — confirm qwen returned "artichoke" + tool call)_
+| flag | purpose |
+|---|---|
+| `--parallel 1` | **essential** — one warm KV slot; else every agent turn re-prefills the ~16k prompt |
+| `-ngl 99 --cpu-moe` | attention/KV/router on the GPU; expert FFNs stay in RAM (won't fit 4 GB) |
+| `-fa on` + `-ctk/-ctv q8_0` | flash-attn + quantized KV so 32k context fits in ~2.8 GB VRAM |
+| `--ctx-size 32768` | must stay **> 16k** for the Qwen-Code system prompt |
+| `--no-mmap` | load weights into RAM up front (avoids paging stalls) |
+| `--jinja` | chat template required for Qwen-Code tool-calling |
+| `--threads 10` | = physical cores (generation is memory-bandwidth-bound) |
+
+Verify on the server, then restart with `pkill -9 -x llama-server; sleep 2; <relaunch>`:
+
+```bash
+curl -s http://127.0.0.1:8080/v1/models
+curl -s http://127.0.0.1:8080/v1/chat/completions -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"Reply with the single word: pong"}],"max_tokens":10}'
+```
+
+## 3. [client] SSH tunnel
+
+Maps the laptop's `localhost:8080` to the server's loopback `8080`:
+
+```bash
+ssh -fN -L 8080:127.0.0.1:8080 filip@192.168.1.22
+curl -s http://localhost:8080/v1/models | head -c 200      # round-trip check
+```
+Stop later: `pkill -f "ssh -fN -L 8080"`.
+
+## 4. [client] Qwen-Code harness
+
+```bash
+node --version                          # need ≥ 20
+npm install -g @qwen-code/qwen-code
+qwen --version
+
+mkdir -p ~/qwen-scratch && cd ~/qwen-scratch
+printf 'The secret word is: artichoke.\n' > notes.txt
+
+export OPENAI_BASE_URL="http://localhost:8080/v1"
+export OPENAI_API_KEY="dummy"           # llama-server has no key; any value works
+export OPENAI_MODEL="unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:IQ4_XS"   # match /v1/models
+
+qwen -p "Use your tools to read notes.txt and tell me the secret word."  # expect: artichoke
+```
+
+✅ A visible `read_file` tool call **and** the answer **"artichoke"** = the full loop works.
+The first turn takes ~190 s (one-time prefill of the ~16k prompt); the warm cache then persists
+across turns and sessions.
+
+## 5. [client] Coding-quality gate (recommended before any config change)
+
+Prove coding ability didn't regress when you change quant/KV/offload (`evals/`, methodology
+adapted from Sebastian Raschka's `local-coding-agent-evals`). Server up + tunnel open:
+
+```bash
+# one-time: clone the agent-pack (unlicensed → used from a local clone, not vendored)
+git clone https://github.com/rasbt/local-coding-agent-evals ~/qwen-scratch/raschka-evals
+
+evals/quality_gate.sh <label>           # fast: 5 tool-reasoning tasks (~1 min, deterministic)
+evals/quality_gate.sh <label> --full    # + agent-pack: 5 buggy repos fixed by qwen, graded by pytest
+```
+Baselines on this box: reasoning **1.00/5**, agent-pack **5/5**. Keep a config only if quality
+≥ baseline. (The agent-pack runs `qwen --yolo` — see `evals/README.md`.)
 
 ---
 
-## Phase F — Household chat frontend (Open WebUI) · DEFERRED until harness done
+# Why these choices (findings)
 
-LAN-accessible ChatGPT-like UI for household (e.g. spouse), reusing the same loopback
-`llama-server`. Docker, host-network, fixed port 3000, login wall. `llama-server` stays
-loopback-only. See design doc "Household chat frontend". Draft command (finalize when we
-get here):
+- **`--parallel 1` is non-negotiable.** Qwen-Code sends a ~16k-token system+tools prompt each
+  session. One warm slot prefills it once (`sim ~0.997`) and reuses it across turns *and* new
+  sessions; multiple slots re-prefill the whole 16k on every turn (~3 min to first token).
+- **GPU offload of attention/KV wins at depth.** At 16k context gen is ~3 t/s CPU-only vs
+  ~8.8 t/s with attention/KV on the GPU — the depth bottleneck is attention-over-KV, which the
+  GPU accelerates. (At ~0 context CPU *looks* faster — misleading; always measure at 16k depth.)
+- **Experts don't fit a 4 GB GPU** → `--cpu-moe` keeps them in RAM. Naively offloading experts
+  (`--n-cpu-moe N<48`) causes per-token CPU↔GPU PCIe ping-pong and gives **no** net speedup.
+- **IQ4_XS is the one throughput win**: +5 % `tg@16k` over Q4_K_M at identical coding quality
+  (agent-pack 5/5). gen ∝ 1/expert-bytes, so a smaller quant ≈ linearly faster generation.
+- **What did NOT help** (all measured at 16k depth): KV-cache quant (q4_0), expert offload,
+  thread count, and speculative decoding (a general 0.6B draft — MoE routing gives weak
+  batch-amortization). The ceiling is the per-token CPU expert read over ~45 GB/s RAM.
+- **`qwen --yolo`** is required for headless *file-editing* agents (write/edit tools are
+  approval-blocked with no TTY → the model loops); read-only tools work without it. `--yolo`
+  auto-executes unsandboxed — sandbox it for untrusted work.
+
+Full blow-by-blow (the original chronological build log, incl. the CPU-vs-GPU reversal) lives in
+`git log` and `docs/`.
+
+# Adapting to different hardware
+
+The config assumes a **small GPU that can't hold the model + a fast CPU/RAM**. Retarget by VRAM:
+
+- **GPU holds the whole model** (≥ ~18 GB free): drop `--cpu-moe` — `-ngl 99` puts everything on
+  the GPU, far faster (no CPU expert read). Consider a higher quant (Q5/Q6) if VRAM allows.
+- **Mid GPU (8-16 GB):** keep `--cpu-moe` but push some expert layers onto the GPU
+  (`--n-cpu-moe N<48`) using the VRAM headroom — **measure**, ping-pong can cancel the gain.
+- **Tiny GPU (this box, 4 GB):** the config as written. If VRAM OOMs: `--ctx-size 24576` (keep
+  > 16k), or `q4_0` KV, or drop GPU offload entirely.
+- **No GPU:** remove `-ngl / --cpu-moe / -fa / -ctk / -ctv`; expect much slower gen at depth.
+
+Also: set `CMAKE_CUDA_ARCHITECTURES` for your GPU (step 1); re-pick the quant with the quality
+gate (step 5); keep the model a **Qwen3-Coder MoE** (Qwen-Code is tuned for it). RAM must hold
+the model + KV cache (~20 GB for IQ4_XS).
+
+# Optional: LAN chat frontend (Open WebUI)
+
+A ChatGPT-like UI for the household, reusing the same loopback server (which stays loopback-only;
+Open WebUI adds its own login wall):
 
 ```bash
 docker run -d --name open-webui --network host \
-  -e PORT=3000 \
-  -e OPENAI_API_BASE_URL=http://127.0.0.1:8080/v1 \
-  -e OPENAI_API_KEY=dummy \
+  -e PORT=3000 -e OPENAI_API_BASE_URL=http://127.0.0.1:8080/v1 -e OPENAI_API_KEY=dummy \
   -v open-webui:/app/backend/data --restart always \
   ghcr.io/open-webui/open-webui:main
 ```
+
+# Docs
+
+- `CLAUDE.md` — orientation for agents (hardware, ops, findings, TODOs).
+- `program.md` — the autonomous, quality-gated throughput-tuning loop.
+- `docs/plans/2026-07-06-local-coding-harness-design.md` — full design + rationale.
+- `docs/plans/2026-07-06-quality-gated-autoperf-design.md` — the quality-gate loop design.
+- `docs/autoperf-reports/2026-07-06-autoperf-report.md` — tuning results (every config tried).
+- `evals/` — the coding-quality gate · `results.tsv` — raw per-config numbers.

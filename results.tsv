@@ -1,3 +1,9 @@
 n	config	pp2048	tg128@16k	vram_mib	reason_5	apack_5	kept	notes
 0	D4 Q4_K_M ngl99 cpu-moe KVq8_0 t10	53.58	8.38	2861	1.00	5/5	baseline	reference; llama-bench @ d16384 r3; reason det@temp0; apack 5/5 via qwen --yolo
 1	Q4_K_M ngl99 cpu-moe KV=q4_0 t10	53.90	8.40	-	-	-	no	KV q4_0 vs q8_0: tg 8.40 vs 8.38 = TIE (+0.2%, within noise). KV-cache type does NOT move tg@16k -> attention-KV read is not the bottleneck. not gated (not a real win)
+2	IQ4_XS ngl99 cpu-moe KVq8_0 t10	54.95	8.80	2777	1.50	5/5	BEST	NEW BEST: tg +5.0% vs baseline, quality INTACT (reason 1.50>=1.00, apack 5/5=baseline), VRAM 2777<3900, pp 54.95>53.58
+3	Q4_0 ngl99 cpu-moe KVq8_0 t10	54.96	8.77	-	-	-	no	dominated by IQ4_XS (tg 8.77<8.80, bigger 16.18GiB); not gated - IQ4_XS already won on tg AND quality
+4	IQ4_XS ncmoe46 offload-2exp t10	55.29	8.81	-	-	-	no	offload 2 expert layers to GPU: tg 8.81 = no gain vs 8.86 (PCIe transfer offsets reduced CPU read; confirms D2)
+5	IQ4_XS ncmoe44 offload-4exp t10	55.51	8.85	-	-	-	no	offload 4 expert layers: tg 8.85 = tie. expert offload does NOT help tg
+6	IQ4_XS ncmoe48 t20	55.17	8.82	-	-	-	no	threads 20 vs 10: tg 8.82 = tie. gen is memory-BW-bound, not thread-bound
+7	IQ4_XS + spec-decode (Qwen3-0.6B draft, ngld0, n-max16)	-	8.76	2777	-	-	no	spec NO gain: 8.76@16k ~= 8.80 base (also 17.5 low-depth ~= 17 base). MoE weak batch-amortization + moderate general-draft acceptance cancel out. draft vocab-compatible, on CPU so VRAM unchanged
