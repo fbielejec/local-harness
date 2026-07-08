@@ -110,6 +110,52 @@ curl -s http://127.0.0.1:8080/v1/chat/completions -H "Content-Type: application/
   -d '{"messages":[{"role":"user","content":"Reply with the single word: pong"}],"max_tokens":10}'
 ```
 
+## 2a. [server] Run it as a systemd service (survives reboots)
+
+In production the winning config runs as a **system-level** service so it auto-starts on
+boot and restarts on crash. Unit file: `deploy/llama-server.service` (repo) →
+`/etc/systemd/system/llama-server.service` (server). It uses the local GGUF path instead of
+`-hf`, so boot needs no network. Install/cutover steps: `docs/plans/2026-07-08-systemd-llama-server.md`.
+
+**Check if it's running** (no sudo):
+
+```bash
+systemctl is-active  llama-server     # -> active
+systemctl is-enabled llama-server     # -> enabled   (will start on boot)
+systemctl status     llama-server     # full state + last log lines
+curl -s http://127.0.0.1:8080/health  # -> {"status":"ok"}   (once weights finish loading)
+```
+
+**View logs** — journald replaces the old `~/llama-server.log` (no sudo):
+
+```bash
+journalctl -fu llama-server                 # follow live (Ctrl-C to stop) — the everyday one
+journalctl -u llama-server -n 100            # last 100 lines
+journalctl -u llama-server -b                # everything since the last boot
+journalctl -u llama-server --since "10 min ago"
+journalctl -u llama-server -p err            # errors only
+journalctl -u llama-server -o cat            # raw lines, no systemd timestamp prefix
+```
+
+**Stop it** (needs sudo):
+
+```bash
+sudo systemctl stop llama-server           # stop now; stays down until started or next boot
+sudo systemctl disable --now llama-server  # stop AND don't auto-start at boot
+```
+⚠️ `pkill llama-server` will **not** stop it — `Restart=always` makes systemd respawn it.
+Always `sudo systemctl stop llama-server` first before a manual/benchmark launch (§2).
+
+**Restart / reboot it** (needs sudo):
+
+```bash
+sudo systemctl restart llama-server   # restart the service (drops warm KV cache; first
+                                      #   request after re-prefills the ~16k prompt, ~190 s)
+sudo systemctl start   llama-server   # bring it back after a stop
+sudo reboot                           # full host reboot — service auto-starts (it's enabled);
+                                      #   re-run the "Check if it's running" block once back up
+```
+
 ## 3. [client] SSH tunnel
 
 Maps the laptop's `localhost:8080` to the server's loopback `8080`:
