@@ -142,19 +142,26 @@ preserved (reasoning 1.50/5 ≥ 1.00 baseline; agent-pack **5/5** = baseline). F
 
 Running list of follow-ups (check off as done; newest at the bottom).
 
-- [ ] **Basic security via `~/.qwen/settings.json`** — the file doesn't exist yet; create it
-  to harden the Qwen-Code client for the self-sovereignty goal. Verify the exact schema
-  against the installed `qwen` version first, then set at least: external telemetry/usage
-  reporting **off** (local `~/.qwen/usage/` is fine — nothing should leave the LAN);
-  tool-execution **sandbox** on (docker/podman/`sandbox-exec`); **no blanket auto-approve**
-  of shell commands (require approval or confine to `~/qwen-scratch`); tool allow/deny list
-  (`coreTools`/`excludeTools`) + MCP server allowlist. `llama-server` stays loopback-only.
-  **Now concrete:** the coding-quality gate (`evals/agent_pack_runner.sh`) runs `qwen --yolo`
-  — edits/shell auto-execute *unsandboxed* at the user's privilege (qwen even warns about it).
-  Wrap those eval runs in a sandbox (`qwen --sandbox` / `QWEN_SANDBOX`, docker/podman) so the
-  agent can't touch the host. (Root cause found 2026-07-06: headless `qwen -p` silently blocks
-  every write/edit tool without `--yolo`, because there's no TTY to approve — so `--yolo` is
-  mandatory for the eval, which is exactly why the sandbox matters.)
+- [~] **Basic security via `~/.qwen/settings.json`** — harden the Qwen-Code client for the
+  self-sovereignty goal. Schema note (verified against installed **qwen 0.19.8**): the file
+  **exists** now and uses the `"$version": 4` nested schema — a `permissions` allow/deny model
+  (not the old `coreTools`/`excludeTools`), plus `privacy.*` and `telemetry.*` blocks.
+    - [x] **Telemetry locked out (2026-07-08).** Set `privacy.usageStatisticsEnabled: false`
+      (the anonymized usage phone-home — tool-call names, API-request metadata, session config)
+      and `telemetry.enabled: false` (OTLP exporter). Local usage recording
+      (`~/.qwen/usage_record.jsonl`) stays — it never leaves the LAN. Backup:
+      `~/.qwen/settings.json.bak-20260708`. Env overrides exist too (`QWEN_TELEMETRY_ENABLED`).
+    - [ ] **Remaining (real hardening, deferred):** tool-execution **sandbox** on
+      (docker/podman/`sandbox-exec`); **no blanket auto-approve** of shell commands (require
+      approval or confine to `~/qwen-scratch`); tool allow/deny list (via the `permissions`
+      block) + MCP server allowlist. `llama-server` stays loopback-only.
+    - Context for the sandbox item: the coding-quality gate (`evals/agent_pack_runner.sh`) runs
+      `qwen --yolo` — edits/shell auto-execute *unsandboxed* at the user's privilege (qwen even
+      warns about it). Wrap those eval runs in a sandbox (`qwen --sandbox` / `QWEN_SANDBOX`,
+      docker/podman) so the agent can't touch the host. (Root cause found 2026-07-06: headless
+      `qwen -p` silently blocks every write/edit tool without `--yolo`, because there's no TTY
+      to approve — so `--yolo` is mandatory for the eval, which is exactly why the sandbox
+      matters.)
 
 ## Docs
 
