@@ -32,6 +32,7 @@ laptop (this machine)                         remote: weebeastie 192.168.1.22
 | Model | `unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:IQ4_XS` (~15.25 GiB, MoE 30B / ~3B active) — autoperf winner (2026-07-07); Q4_K_M was the prior default |
 | Server log | remote `~/llama-server.log` |
 | Qwen-Code scratch workspace | laptop `~/qwen-scratch` |
+| Chat frontend (Open WebUI, Docker) | remote `~/openwebui/` (compose + gitignored `.env`); UI at `http://192.168.1.22:3000`; config in `deploy/openwebui/` |
 
 ## Operating the server
 
@@ -81,6 +82,30 @@ export OPENAI_BASE_URL="http://localhost:8080/v1" OPENAI_API_KEY=dummy \
        OPENAI_MODEL="unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:IQ4_XS"
 qwen -p "Use your tools to read notes.txt and tell me the secret word."   # expect: artichoke
 ```
+
+## Operating the chat frontend (Open WebUI)
+
+LAN web chat UI at **`http://192.168.1.22:3000`** (any device on the home LAN). Runs as a Docker
+Compose service on weebeastie; `restart: unless-stopped` + docker `enabled` at boot ⇒ survives
+reboots (no systemd unit needed). Config is version-controlled at `deploy/openwebui/`
+(compose + `.env.example`); secrets in a gitignored `deploy/openwebui/.env`. Design + rationale:
+`docs/plans/2026-07-08-lan-chat-frontend-openwebui-design.md`.
+
+```bash
+cd ~/openwebui                          # on weebeastie
+docker compose ps | logs -f | restart | down
+docker compose pull && docker compose up -d   # update after bumping the pinned image tag
+```
+
+- **Host networking is required** — llama-server is loopback-only, so the container reaches it
+  via `localhost:8080` and exposes port 3000 to the LAN. The model stays private; only the UI
+  is on the network.
+- **Document RAG is off** (no embedder downloaded — `RAG_EMBEDDING_ENGINE=openai` + bypass).
+  Enable later via the Admin Panel (Documents). Web search (Exa) is on, with per-query consent.
+- **Per-user memory** is on; separate accounts ⇒ separate memories (agentic memory is
+  model-dependent and may be flaky on Qwen; manual memory is reliable).
+- ⚠️ **ConfigVar caveat:** the compose env only *seeds first boot*. After that the `open-webui`
+  volume is authoritative — change settings in the Admin Panel (or wipe the volume to re-seed).
 
 ## Key findings so far (don't relearn these)
 

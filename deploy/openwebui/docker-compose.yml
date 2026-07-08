@@ -1,0 +1,75 @@
+# Open WebUI — LAN chat frontend for the local Qwen model.
+# Runs on weebeastie (192.168.1.22). Reach it from any LAN device at http://192.168.1.22:3000
+#
+# Design: docs/plans/2026-07-08-lan-chat-frontend-openwebui-design.md
+#
+# Deploy (on weebeastie, from ~/openwebui/):
+#   docker compose up -d
+# Ops:
+#   docker compose ps | logs -f | restart | down
+# Update:
+#   edit the image tag, then: docker compose pull && docker compose up -d
+#
+# NOTE: most settings below are Open WebUI "ConfigVar" — this env only SEEDS the first boot.
+# After first boot the named volume is authoritative; change settings in the Admin Panel
+# (or wipe the volume to re-seed).
+
+services:
+  open-webui:
+    image: ghcr.io/open-webui/open-webui:v0.10.2
+    container_name: open-webui
+    # llama-server listens only on 127.0.0.1:8080 — host networking lets the container reach
+    # it via localhost AND puts port 3000 straight on the LAN. Bridge networking cannot see a
+    # loopback-bound service.
+    network_mode: host
+    restart: unless-stopped
+    # Cheap hardening (host networking is a deliberate trade-off; see design doc "Sandboxing").
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    environment:
+      # --- connection to the local model (loopback, via host networking) ---
+      - OPENAI_API_BASE_URL=http://localhost:8080/v1
+      - OPENAI_API_KEY=dummy            # llama-server ignores it; Open WebUI needs a value
+      - ENABLE_OLLAMA_API=false
+
+      # --- network ---
+      - PORT=3000                       # avoid clash with llama-server's 8080 under host net
+      - WEBUI_URL=http://192.168.1.22:3000
+
+      # --- auth: fixed accounts, signup locked after bootstrap ---
+      - WEBUI_AUTH=true
+      - ENABLE_SIGNUP=false             # first-admin bootstrap still allowed; admin adds the rest
+      - DEFAULT_USER_ROLE=pending
+      - WEBUI_SECRET_KEY=${WEBUI_SECRET_KEY:?set WEBUI_SECRET_KEY in .env}
+
+      # --- per-user memory (on by default; char-budget injection => no embedder needed) ---
+      - ENABLE_MEMORIES=true
+      - ENABLE_MEMORY_SYSTEM_CONTEXT=true
+
+      # --- document RAG OFF for now: no retriever model downloaded ---
+      # external engine => no local SentenceTransformers model is loaded at startup (no HF pull).
+      # Enable later via the admin panel (Documents) or by flipping these keys + re-seeding.
+      - RAG_EMBEDDING_ENGINE=openai
+      - BYPASS_EMBEDDING_AND_RETRIEVAL=true
+
+      # --- web search via Exa (a deliberate, consented LAN-exit) ---
+      - ENABLE_WEB_SEARCH=true
+      - WEB_SEARCH_ENGINE=exa
+      - EXA_API_KEY=${EXA_API_KEY:-}          # set in .env; empty just means web search is inert
+      - BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL=true   # full-content injection, no embedder
+      - WEB_SEARCH_RESULT_COUNT=3                        # keep within the 32k ctx window
+      - ENABLE_WEB_SEARCH_CONFIRMATION=true              # explicit consent before each query
+
+      # --- nothing else leaves the LAN ---
+      - ENABLE_VERSION_UPDATE_CHECK=false   # no GitHub version ping
+      - ENABLE_COMMUNITY_SHARING=false      # no share-to-community
+      - ENABLE_DIRECT_CONNECTIONS=false     # users can't wire external model endpoints
+      - ANONYMIZED_TELEMETRY=false          # Chroma/underlying-lib telemetry off
+      - DO_NOT_TRACK=true
+    volumes:
+      - open-webui:/app/backend/data        # users, chats, memories, settings persist here
+
+volumes:
+  open-webui:

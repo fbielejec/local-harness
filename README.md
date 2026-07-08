@@ -242,17 +242,41 @@ Also: set `CMAKE_CUDA_ARCHITECTURES` for your GPU (step 1); re-pick the quant wi
 gate (step 5); keep the model a **Qwen3-Coder MoE** (Qwen-Code is tuned for it). RAM must hold
 the model + KV cache (~20 GB for IQ4_XS).
 
-# Optional: LAN chat frontend (Open WebUI)
+# LAN chat frontend (Open WebUI) — 2026-07-08
 
-A ChatGPT-like UI for the household, reusing the same loopback server (which stays loopback-only;
-Open WebUI adds its own login wall):
+A ChatGPT-like UI for the household at **http://192.168.1.22:3000**, reusing the loopback
+llama-server (which stays loopback-only; Open WebUI adds its own login wall). Runs as a Docker
+Compose service on weebeastie — `restart: unless-stopped` + docker `enabled` at boot ⇒ survives
+reboots. Full rationale: `docs/plans/2026-07-08-lan-chat-frontend-openwebui-design.md`.
 
+**Version-controlled config:** `deploy/openwebui/docker-compose.yml` (+ `.env.example`). Secrets
+live in a gitignored `deploy/openwebui/.env` (`WEBUI_SECRET_KEY`, `EXA_API_KEY`). Pinned image
+`ghcr.io/open-webui/open-webui:v0.10.2`. Key config: host networking (to reach loopback model),
+`PORT=3000`, fixed accounts w/ signup locked, per-user memory on, document-RAG **off** (no
+embedder downloaded — `RAG_EMBEDDING_ENGINE=openai` + bypass), Exa web search on (with
+per-query confirmation), telemetry/version-check/community-sharing off, `cap_drop: [ALL]` +
+`no-new-privileges`.
+
+**Deploy / ops (on weebeastie, from `~/openwebui/`):**
 ```bash
-docker run -d --name open-webui --network host \
-  -e PORT=3000 -e OPENAI_API_BASE_URL=http://127.0.0.1:8080/v1 -e OPENAI_API_KEY=dummy \
-  -v open-webui:/app/backend/data --restart always \
-  ghcr.io/open-webui/open-webui:main
+docker compose up -d          # start (also pulls); down / restart / ps as usual
+docker compose logs -f        # live logs
+docker compose pull && docker compose up -d   # update after bumping the image tag
 ```
+
+**First-run browser steps (once):** (signup is already locked — `enable_signup=false`,
+`onboarding=true` — so only the first admin can self-create.)
+1. Open `http://192.168.1.22:3000`, register **filip** → auto-admin.
+2. Admin Panel → Users: add **spouse** and **guest** (shared password).
+3. Admin Panel → set the Qwen model's **Function Calling = Native** (enables `search_web` +
+   memory tools).
+4. Admin Panel → Settings → Web Search → paste the **Exa API key** (this is authoritative —
+   `EXA_API_KEY` is a ConfigVar already seeded empty, so editing `.env` + re-up won't override
+   it). Record the key in `~/openwebui/.env` too, so a volume-wipe re-seed still has it.
+
+⚠️ Most settings are Open WebUI "ConfigVar" — the compose env only **seeds first boot**;
+afterwards the volume is authoritative, so change settings in the Admin Panel (or wipe the
+`open-webui` volume to re-seed).
 
 # Docs
 
