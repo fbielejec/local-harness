@@ -146,7 +146,12 @@ frontend; manual first, then systemd.
 10. Record baseline tok/s + quality gaps → decide on Q5_K_M vs `--threads`/`--n-gpu-layers`/`--ctx-size`.
 
 **Phase E — Make it durable**
-11. systemd user service for `llama-server` (auto-restart/boot); `autossh` service for the tunnel.
+11. **[done 2026-07-08]** systemd **system** service for `llama-server` (auto-restart/boot) —
+    version-controlled at `deploy/llama-server.service`, installed to `/etc/systemd/system/`,
+    points at the local GGUF (not `-hf`) so boot has no network dependency. Chosen over a
+    *user* service so it comes up at boot with no login. See `docs/plans/2026-07-08-systemd-llama-server.md`.
+12. **[remaining]** `autossh` (or systemd user) service on the laptop for the SSH tunnel, so a
+    laptop reboot re-establishes `localhost:8080 → remote`.
 
 **First checkpoint to prove viability:** Phase C step 8 — a working tool call
 end-to-end. Everything before is plumbing; that is the moment it becomes a real agent.

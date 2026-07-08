@@ -37,9 +37,28 @@ laptop (this machine)                         remote: weebeastie 192.168.1.22
 
 SSH: `ssh filip@192.168.1.22`
 
-**Current production launch (config "IQ4_XS", 2026-07-07)** — CPU experts + GPU attention/KV,
-single warm slot. IQ4_XS is the autoperf winner: **+5% tg** vs the prior Q4_K_M "D4" at
-identical coding quality (agent-pack 5/5) and lower VRAM (2777 MiB):
+**Production server = systemd unit (config "IQ4_XS", 2026-07-08).** The autoperf winner
+(CPU experts + GPU attention/KV, single warm slot; **+5% tg** vs the prior Q4_K_M "D4" at
+identical coding quality (agent-pack 5/5), VRAM ~2777 MiB) now runs as a **system-level
+service** on weebeastie — auto-starts at boot, `Restart=always` on crash. This is Phase E
+(server half). Unit file is version-controlled at `deploy/llama-server.service` → installed
+at `/etc/systemd/system/llama-server.service` (**edit one, re-sync the other**). It points at
+the **local GGUF path** (not `-hf`) so boot has zero network dependency.
+
+```bash
+sudo systemctl restart llama-server        # restart (also: stop / start / status — all need sudo except status)
+systemctl status llama-server              # state (no sudo)
+journalctl -fu llama-server                # live logs (replaces `tail -f ~/llama-server.log`)
+systemctl is-enabled llama-server          # 'enabled' = survives reboot
+nvidia-smi --query-gpu=memory.used,memory.total,utilization.gpu --format=csv   # VRAM
+```
+
+⚠️ **Benchmarking gotcha:** the service has `Restart=always`, so a bare
+`pkill -f build/bin/llama-server` (as the autoperf loop does) makes systemd **respawn it**
+and re-grab port 8080. Before any manual/benchmark launch, first
+`sudo systemctl stop llama-server`; re-enable production with `sudo systemctl start llama-server`.
+
+**Manual launch (reference / one-off benchmarking only** — stop the service first, see above**):**
 
 ```bash
 export LLAMA_CACHE=$HOME/models
@@ -52,9 +71,6 @@ nohup ~/Programs/llama.cpp/build/bin/llama-server \
   --no-mmap --jinja \
   > ~/llama-server.log 2>&1 &
 ```
-
-Restart: `pkill -f "build/bin/llama-server"; sleep 2; <relaunch>`
-Watch:   `tail -f ~/llama-server.log`   ·   VRAM: `nvidia-smi --query-gpu=memory.used,memory.total,utilization.gpu --format=csv`
 
 **Tunnel (laptop):** `ssh -fN -L 8080:127.0.0.1:8080 filip@192.168.1.22` (kill: `pkill -f "ssh -fN -L 8080"`)
 
