@@ -117,11 +117,15 @@ account self-create as admin. So:
 
 1. First run: open `http://192.168.1.22:3000`, register **filip** → becomes admin.
 2. Admin Panel → Users → add **spouse** (role user) and **guest** (role user, shared password).
-3. Admin Panel → set the Qwen model's **Function Calling = Native** so `search_web` and the
-   memory tools fire (llama-server's `--jinja` supports tool calling).
-4. Admin Panel → Settings → Web Search → paste the **Exa API key**. This is authoritative:
+3. Admin Panel → Settings → Web Search → paste the **Exa API key**. This is authoritative:
    `EXA_API_KEY` is a ConfigVar already seeded empty on first boot, so editing `.env` + re-up
    won't override the DB value. Record it in `.env` too for reproducibility (volume re-seed).
+
+**Function calling:** no action needed. In v0.10.0+ **Native (Agentic) mode is the default** for
+all models (the old "Default" mode was renamed "Legacy" and is the explicit opt-out). The
+built-in `search_web` and memory tools are Native-only and work out of the box; llama-server's
+`--jinja` provides the tool-calling support. The mode is under a model's *Advanced Params →
+Function Calling* if it ever needs inspecting.
 
 Per-user memory is automatic. Note: *autonomous* memory (model self-deciding what to save) is
 model-dependent and may be inconsistent with a small local model; **manual** memory

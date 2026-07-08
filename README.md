@@ -268,11 +268,14 @@ docker compose pull && docker compose up -d   # update after bumping the image t
 `onboarding=true` — so only the first admin can self-create.)
 1. Open `http://192.168.1.22:3000`, register **filip** → auto-admin.
 2. Admin Panel → Users: add **spouse** and **guest** (shared password).
-3. Admin Panel → set the Qwen model's **Function Calling = Native** (enables `search_web` +
-   memory tools).
-4. Admin Panel → Settings → Web Search → paste the **Exa API key** (this is authoritative —
+3. Admin Panel → Settings → Web Search → paste the **Exa API key** (this is authoritative —
    `EXA_API_KEY` is a ConfigVar already seeded empty, so editing `.env` + re-up won't override
    it). Record the key in `~/openwebui/.env` too, so a volume-wipe re-seed still has it.
+
+No need to set "Function Calling = Native": in v0.10.0+ **Native (Agentic) mode is the default**
+for all models (the old "Default" was renamed "Legacy" and is the opt-out). `search_web` and the
+memory tools work out of the box. The mode lives under a model's *Advanced Params → Function
+Calling* if you ever need to inspect it.
 
 ⚠️ Most settings are Open WebUI "ConfigVar" — the compose env only **seeds first boot**;
 afterwards the volume is authoritative, so change settings in the Admin Panel (or wipe the
