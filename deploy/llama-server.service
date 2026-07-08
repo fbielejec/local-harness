@@ -1,0 +1,23 @@
+[Unit]
+Description=llama.cpp server — Qwen3-Coder-30B-A3B IQ4_XS (local coding harness)
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=filip
+Group=filip
+WorkingDirectory=/home/filip/Programs/llama.cpp/build/bin
+ExecStart=/home/filip/Programs/llama.cpp/build/bin/llama-server \
+  --model /home/filip/models/models--unsloth--Qwen3-Coder-30B-A3B-Instruct-GGUF/snapshots/b17cb02dd882d5b6ab62fc777ad2995f19668350/Qwen3-Coder-30B-A3B-Instruct-IQ4_XS.gguf \
+  --host 127.0.0.1 --port 8080 \
+  --threads 10 --parallel 1 --ctx-size 32768 \
+  --n-gpu-layers 99 --cpu-moe \
+  -fa on --cache-type-k q8_0 --cache-type-v q8_0 \
+  --no-mmap --jinja
+Restart=always
+RestartSec=10
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target
