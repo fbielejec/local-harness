@@ -143,8 +143,9 @@ preserved (reasoning 1.50/5 ≥ 1.00 baseline; agent-pack **5/5** = baseline). F
 Running list of follow-ups (check off as done; newest at the bottom).
 
 - [ ] RAG. Embedding model, retrieval index split per user.
-- [ ] Base model change. Hardware is too weak for coding specific model, a generalist geared 
+- [ ] Base model change. Hardware is too weak for coding specific model, a generalist geared
   towards working with text, translations, information retrieval (web search and RAG).
+- [ ] Evaluate qwen-family models tweaked towards lower token consumption per task: https://paperswithcode.co/paper/102599
 - [~] **Basic security via `~/.qwen/settings.json`** — harden the Qwen-Code client for the
   self-sovereignty goal. Schema note (verified against installed **qwen 0.19.8**): the file
   **exists** now and uses the `"$version": 4` nested schema — a `permissions` allow/deny model
