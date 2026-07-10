@@ -1,0 +1,20 @@
+# Local-dev Qdrant for the EP-RAG pipeline.
+# Mirrors deploy/openwebui: pinned image, named volume, restart policy. On
+# weebeastie this same file serves the production index beside llama-server +
+# Open WebUI. Qdrant needs no config file to run.
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.18.0   # keep in lockstep with qdrant-client (rag/pyproject.toml)
+    container_name: ep-rag-qdrant
+    restart: unless-stopped
+    environment:
+      # Self-sovereignty: no phone-home (matches the openwebui + qwen-code posture).
+      - QDRANT__TELEMETRY_DISABLED=true
+    ports:
+      - "6333:6333"   # REST API + web dashboard (http://localhost:6333/dashboard)
+      - "6334:6334"   # gRPC (optional; qdrant-client uses REST by default)
+    volumes:
+      - qdrant_storage:/qdrant/storage
+
+volumes:
+  qdrant_storage:

@@ -191,7 +191,7 @@ docs/plans/2026-07-10-ep-committee-rag-design.md   (this file)
    answer; faithfulness moves with it.
 6. Eval harness prints separate retrieval vs generation numbers on the golden set.
 
-## Interview mapping (Beat 3)
+## Debugging (Beat 3)
 
 | Talking point | Artifact that rehearses it |
 |---|---|
@@ -216,6 +216,4 @@ docs/plans/2026-07-10-ep-committee-rag-design.md   (this file)
 
 - Org doc RAG section: `~/CloudStation/LLMs/research/LLMs_README.org` (Lewis et al. 2020
   marginalization; industry retrieve-then-concatenate; gradient decoupling).
-- Interview prep: `~/CloudStation/TeXProjects/CV/interview_prep_aiinfra.org` — Beat 3 +
-  "Diagnostic exercises" (Drills 1 & 2).
 - Verified EP source endpoints: research pass 2026-07-10 (this design's §Ingestion).
