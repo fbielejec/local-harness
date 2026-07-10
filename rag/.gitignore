@@ -1,0 +1,10 @@
+# Python env + caches
+.venv/
+__pycache__/
+*.pyc
+
+# Secrets (the embedding/generator/qdrant config lives here at runtime)
+.env
+
+# Ingested corpus — fetched PDFs are reproducible, not source; keep them out of git
+data/

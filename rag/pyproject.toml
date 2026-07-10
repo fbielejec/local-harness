@@ -1,0 +1,10 @@
+[project]
+name = "ep-rag"
+version = "0.1.0"
+description = "Almost-production RAG over EMPL/REGI/IMCO European Parliament committee documents"
+requires-python = ">=3.10"
+dependencies = []
+
+# No [build-system]: uv treats this as a non-packaged project (a collection of
+# scripts/modules), so it never tries to build/install `ep-rag` itself — it only
+# manages the virtualenv + dependencies. We add deps per brick with `uv add`.
