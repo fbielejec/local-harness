@@ -1,0 +1,18 @@
+[package]
+name = "ep-rag-server"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "rag-server"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+ep-rag-retrieve = { path = "../retrieve" }
+ep-rag-generate = { path = "../generate" }
+axum = { workspace = true }
+tokio = { workspace = true }
+futures = { workspace = true }

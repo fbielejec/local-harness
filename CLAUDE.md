@@ -162,6 +162,16 @@ Running list of follow-ups (check off as done; newest at the bottom).
     is the **executable spec** for the Rust `retrieve`/`generate` crates.
   - **[x] Drill 0 — index health (2026-07-11):** `rag/drills/drill0_index_health.org`. Integrity +
     separation/anisotropy + near-dups + self-retrieval probe. Index healthy.
+  - **[x] `retrieve`/`generate`/`rag-server` Rust crates (2026-07-11):** productized the notebook
+    into three workspace crates — `ep-rag-retrieve` (bge query-prefix embed → Qdrant gRPC top-k),
+    `ep-rag-generate` (grounded `assemble`, `<think>` strip, serve-time provenance/Sources join,
+    UTF-8-safe streaming + non-streaming llama-server client), `ep-rag-server` (axum,
+    OpenAI-compatible `/v1/models` + `/v1/chat/completions` streaming & not, **startup
+    live-vs-stored contract assert**, warm-on-boot, env `Config`). 30 unit tests green,
+    warning-free; per-unit spec+quality review + final holistic review passed. `make serve` runs it
+    on loopback `:8081`. **NOT yet deployed / run end-to-end** — the live path (Qdrant + llama-server)
+    is Phase 4 below. Plan: `docs/plans/2026-07-11-rag-server-implementation-plan.md`. On branch
+    `rag-server` (unmerged as of writing).
   - **Don't relearn (key decisions + findings):**
     - Embed = **candle** (pure Rust), NOT fastembed — its ONNX prebuilt needs glibc ≥2.38, this
       box is 2.35 (`__isoc23_*` link error). candle links cleanly, no C++.
@@ -187,11 +197,15 @@ Running list of follow-ups (check off as done; newest at the bottom).
     - **Drill 2 — confidence-blind fusion:** the fusion switch (mean-pool vs `p_eta`-weighted) on a
       query whose top-k pulls the cosine-1.000 boilerplate twin; dupes outvote gold; rerank/MMR/dedup
       restore it, faithfulness moving in step.
-  - **[ ] Then:** harden `retrieve`/`generate` into Rust crates (+ `rag-server`, OpenAI-compatible
-    front for Open WebUI) · eval harness (recall@k/MRR **vs** groundedness+citation-accuracy) ·
-    Qdrant→weebeastie + Open WebUI wiring (the integration design doc).
+  - **[ ] Then — deploy (Phase 4 of the rag-server plan):** snapshot-migrate the index to
+    weebeastie (no re-embed; contract travels in the payload) · run `rag-server` there as a systemd
+    unit (loopback `:8081`, mirroring `llama-server`) · register it as Open WebUI's **second** model
+    ("EP Committees, grounded"), keeping `BYPASS_EMBEDDING_AND_RETRIEVAL=true`. Plus the eval harness
+    (recall@k/MRR **vs** groundedness+citation-accuracy). Steps: `docs/plans/2026-07-11-rag-server-implementation-plan.md`
+    §Phase 4 + `docs/plans/2026-07-11-openwebui-rag-integration-design.md`.
   - **Run:** `cd rag && make pipeline` (qdrant-up → fetch → ingest → index) · `make parity` ·
-    drills/notebook in Emacs (`llms_kernel`) or `uv run --project drills python drills/…`.
+    `make serve` (rag-server, OpenAI-compatible RAG on `:8081`) · drills/notebook in Emacs
+    (`llms_kernel`) or `uv run --project drills python drills/…`.
   - [ ] org documents (my knowledge db) — later, same pipeline.
 - [ ] Base model change. Hardware is too weak for coding specific model, a generalist geared
   towards working with text, translations, information retrieval (web search and RAG).

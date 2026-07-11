@@ -283,8 +283,8 @@ afterwards the volume is authoritative, so change settings in the Admin Panel (o
 
 # EP-Committee RAG — 2026-07-11
 
-A grounded, cited Q&A assistant over EMPL/REGI/IMCO committee PDFs, doubling as a RAG-debugging
-rig for the interview (Beat 3). Maximal-Rust ingestion + index; org-babel notebooks for the drills
+A grounded, cited Q&A assistant over EMPL/REGI/IMCO committee PDFs. 
+Rust ingestion + index; org-babel notebooks for the debugging drills 
 and the hand-stitched query path. Full design: `docs/plans/2026-07-10-ep-committee-rag-design.md`.
 
 **Stack:** Qdrant v1.18 (`deploy/qdrant/`) · `BAAI/bge-small-en-v1.5` embeddings (candle, pure
@@ -294,6 +294,7 @@ Rust) · generator = the loopback `llama-server` (`:8080/v1`). One code path, tw
 ```bash
 make pipeline        # qdrant-up → fetch → ingest → index   (12 PDFs → 490 chunks → Qdrant)
 make parity          # candle vs sentence-transformers embed parity gate (cosine 1.0)
+make serve           # rag-server: OpenAI-compatible RAG endpoint on loopback :8081
 make qdrant-status   # collection point count · make help for all targets
 ```
 
@@ -306,8 +307,17 @@ make qdrant-status   # collection point count · make help for all targets
   `retrieve`/`generate` crates.
 - **Drill 0 (index health)** — `rag/drills/drill0_index_health.org`: integrity, separation
   (anisotropic cone, mean cosine 0.68), near-dups, self-retrieval probe.
-- **Next** — the two named debugging drills (embedding-mismatch, confidence-blind fusion), then
-  Rust hardening + eval harness + Open WebUI wiring
+- **`rag-server` crates built (2026-07-11)** — the notebook productized into three workspace
+  crates: `ep-rag-retrieve` (bge query-prefix embed → Qdrant gRPC top-k), `ep-rag-generate`
+  (grounded `assemble`, `<think>` strip, serve-time provenance/Sources join, UTF-8-safe streaming +
+  non-streaming llama-server client), and `ep-rag-server` (axum, OpenAI-compatible `/v1/models` +
+  `/v1/chat/completions` streaming & not, **startup live-vs-stored contract assert**, warm-on-boot).
+  30 unit tests green, warning-free; spec + code-quality reviewed. `make serve` → `:8081`. **Not yet
+  deployed / run end-to-end** — that's the deploy phase. On branch `rag-server`. Plan:
+  `docs/plans/2026-07-11-rag-server-implementation-plan.md`.
+- **Next** — the two named debugging drills (embedding-mismatch, confidence-blind fusion) + eval
+  harness; then **deploy**: snapshot-migrate the index to weebeastie, run `rag-server` there as a
+  systemd unit, register it as Open WebUI's second model
   (`docs/plans/2026-07-11-openwebui-rag-integration-design.md`).
 
 # Docs
@@ -319,5 +329,6 @@ make qdrant-status   # collection point count · make help for all targets
 - `docs/autoperf-reports/2026-07-06-autoperf-report.md` — tuning results (every config tried).
 - `evals/` — the coding-quality gate · `results.tsv` — raw per-config numbers.
 - `docs/plans/2026-07-10-ep-committee-rag-design.md` — EP-committee RAG design + status.
-- `docs/plans/2026-07-11-openwebui-rag-integration-design.md` — wiring the RAG behind Open WebUI (design only).
+- `docs/plans/2026-07-11-openwebui-rag-integration-design.md` — wiring the RAG behind Open WebUI (design; crates built, deploy pending).
+- `docs/plans/2026-07-11-rag-server-implementation-plan.md` — the `rag-server` build plan (Phases 0–3 done, Phase 4 deploy pending).
 - `docs/plans/2026-07-08-lan-chat-frontend-openwebui-design.md` — the Open WebUI chat frontend.

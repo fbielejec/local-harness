@@ -14,9 +14,6 @@ separated" becomes a menu of statistics + one probe:
 4. *self-retrieval probe* — each passage, re-embedded AS A QUERY, returns itself
    (the label-free generalization of =D ≈ I=)
 
-Runnable in Emacs: =C-c C-c= each block; the shared =:session= keeps =V=, =cids=,
-=texts= alive across blocks.
-
 ** Setup — pull the whole index
 
 #+BEGIN_SRC jupyter-python :session llms :kernel llms_kernel :async yes :exports both

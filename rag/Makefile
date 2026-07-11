@@ -13,7 +13,7 @@ CARGO_RUN := cargo run --release
 
 .DEFAULT_GOAL := help
 .PHONY: help qdrant-up qdrant-down qdrant-logs qdrant-status \
-	fetch ingest index parse-gate embed-gate parity pipeline test
+	fetch ingest index parse-gate embed-gate parity pipeline serve test
 
 help: ## list targets
 	@grep -hE '^[a-zA-Z0-9_-]+:.*##' $(MAKEFILE_LIST) | sort | awk 'BEGIN{FS=":.*## "}{printf "  \033[36m%-13s\033[0m %s\n", $$1, $$2}'
@@ -54,6 +54,9 @@ parity: embed-gate ## cross-language embed parity: candle vs sentence-transforme
 # --- joint ------------------------------------------------------------------
 pipeline: qdrant-up fetch ingest index ## run the whole ingestion pipeline end to end
 	@echo "pipeline complete → Qdrant collection populated"
+
+serve: ## run rag-server (OpenAI-compatible RAG endpoint on :8081)
+	$(CARGO_RUN) -p ep-rag-server --bin rag-server
 
 test: ## cargo test across the workspace
 	cargo test
