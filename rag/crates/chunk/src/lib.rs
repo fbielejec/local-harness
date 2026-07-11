@@ -13,11 +13,11 @@
 use anyhow::{anyhow, Result};
 use hf_hub::{api::sync::Api, Repo, RepoType};
 use regex::Regex;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use text_splitter::{ChunkConfig, TextSplitter};
 use tokenizers::Tokenizer;
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Chunk {
     pub citation_id: String, // doc_id:chunk_index — what the generator cites
     pub doc_id: String,

@@ -5,8 +5,11 @@
 #   fetch ─► ingest (parse+chunk) ─► index (embed+upsert) ─► Qdrant
 #   gates:  parse-gate · embed-gate · parity (cross-language embed check)
 
-COMPOSE := docker compose -f ../deploy/qdrant/docker-compose.yml
-LIMIT   ?=
+COMPOSE   := docker compose -f ../deploy/qdrant/docker-compose.yml
+LIMIT     ?=
+# Release: candle's numerical kernels run 10-50x slower unoptimized (debug).
+# One profile for every run target so `make pipeline` never recompiles mid-chain.
+CARGO_RUN := cargo run --release
 
 .DEFAULT_GOAL := help
 .PHONY: help qdrant-up qdrant-down qdrant-logs qdrant-status \
@@ -27,20 +30,20 @@ qdrant-status: ## list Qdrant collections (is anything indexed yet?)
 
 # --- pipeline steps (in order) ----------------------------------------------
 fetch: ## 1. download EN PDFs + manifest.jsonl   (LIMIT=2 → 2 docs/type; empty = full)
-	cargo run -p ep-rag-fetch --bin fetch -- $(LIMIT)
+	$(CARGO_RUN) -p ep-rag-fetch --bin fetch -- $(LIMIT)
 
 ingest: ## 2. parse + chunk every manifest doc → data/chunks.jsonl
-	cargo run -p ep-rag-ingest --bin ingest
+	$(CARGO_RUN) -p ep-rag-ingest --bin ingest
 
 index: ## 3. embed chunks + upsert to Qdrant with the contract-stamped payload (Drill-1 surface)
-	cargo run -p ep-rag-index --bin index
+	$(CARGO_RUN) -p ep-rag-index --bin index
 
 # --- gates / verification ---------------------------------------------------
 parse-gate: ## pdf-extract vs pymupdf parity gate
-	cargo run -p ep-rag-parse --bin parse-gate
+	$(CARGO_RUN) -p ep-rag-parse --bin parse-gate
 
 embed-gate: ## candle embed gate → data/parity/rust.json
-	cargo run -p ep-rag-embed --bin embed-gate
+	$(CARGO_RUN) -p ep-rag-embed --bin embed-gate
 
 parity: embed-gate ## cross-language embed parity: candle vs sentence-transformers
 	uv run --project drills python drills/parity_gate.py
