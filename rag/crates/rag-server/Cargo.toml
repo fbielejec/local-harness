@@ -11,7 +11,6 @@ path = "src/main.rs"
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-ep-rag-core = { path = "../core" }
 ep-rag-retrieve = { path = "../retrieve" }
 ep-rag-generate = { path = "../generate" }
 axum = { workspace = true }

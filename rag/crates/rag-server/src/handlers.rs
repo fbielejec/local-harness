@@ -27,6 +27,9 @@ pub async fn chat_completions(
 
     // Streaming only when NOT stripping think (delta-wise strip needs a straddling buffer;
     // STRIP_THINK falls back to buffered non-streaming). See Task 3.5.
+    // CAVEAT: a `stream:true` client under STRIP_THINK=1 gets a JSON body, not SSE — a
+    // strict OpenAI client that requested text/event-stream may mishandle it. Off by
+    // default (current model emits no <think>); revisit if a ThinkingCap model lands.
     let want_stream = req.stream && !state.cfg.strip_think;
     if want_stream {
         return stream_answer(state, system, user, cited).await;
