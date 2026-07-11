@@ -1,0 +1,148 @@
+#+TITLE: RAG Query — hand-stitched retriever → generator
+
+* RAG query: closing the loop (retriever → Qwen)
+
+Industry retrieve-then-concatenate (no marginalization): embed the question, pull top-k
+chunks, *concatenate* them into one grounded prompt, and run *one* generation. The
+retriever's scores select top-k and are then discarded — a single =p(y | x, fuse(z))=.
+This notebook hand-stitches it end to end before we harden it into Rust (=retrieve= +
+=generate= crates).
+
+Two remote/service deps: *Qdrant* (:6333, the index) and the *Qwen llama-server*
+(:8080/v1, over the ssh tunnel). Cold-start on Qwen's first call is ~s of minutes
+(model fault-in); it's warm thereafter. =--parallel 1= serializes requests.
+
+Runnable in Emacs: =C-c C-c= each block; the shared =:session= keeps state alive.
+
+** Setup — retriever + generator clients
+
+#+BEGIN_SRC jupyter-python :session llms :kernel llms_kernel :async yes :exports both
+  import json, urllib.request
+  import torch, torch.nn.functional as F
+  from transformers import AutoTokenizer, AutoModel
+
+  QDRANT     = "http://localhost:6333"
+  COLLECTION = "ep_committee_docs"
+  QWEN       = "http://localhost:8080/v1"     # remote Qwen llama-server, over the ssh tunnel
+
+  def http_get(url):
+      return json.load(urllib.request.urlopen(url, timeout=10))
+
+  def http_post(url, body, timeout=300):
+      req = urllib.request.Request(url, data=json.dumps(body).encode(),
+                                   headers={"content-type": "application/json"})
+      return json.load(urllib.request.urlopen(req, timeout=timeout))
+
+  # retriever: bge query embedder (the query PREFIX!) + Qdrant top-k
+  _M, _QPREFIX = "BAAI/bge-small-en-v1.5", "Represent this sentence for searching relevant passages:"
+  _tok, _model = AutoTokenizer.from_pretrained(_M), AutoModel.from_pretrained(_M).eval()
+
+  @torch.no_grad()
+  def embed_query(text):
+      enc = _tok([f"{_QPREFIX} {text}"], padding=True, truncation=True,
+                 max_length=512, return_tensors="pt")
+      return F.normalize(_model(**enc).last_hidden_state[:, 0], p=2, dim=1)[0].numpy()
+
+  def search(vec, k=5):
+      url = f"{QDRANT}/collections/{COLLECTION}/points/search"
+      return http_post(url, {"vector": vec.tolist(), "limit": k, "with_payload": True})["result"]
+
+  # generator: llama-server exposes the gguf path as the model id
+  MODEL = http_get(f"{QWEN}/models")["data"][0]["id"]
+  print("qwen model:", MODEL.rsplit("/", 1)[-1])
+#+END_SRC
+
+#+RESULTS:
+: /home/filip/llms/lib/python3.10/site-packages/huggingface_hub/file_download.py:949: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+:   warnings.warn(
+: qwen model: Qwen3-Coder-30B-A3B-Instruct-IQ4_XS.gguf
+
+** A — retrieve
+
+#+BEGIN_SRC jupyter-python :session llms :kernel llms_kernel :async yes :exports both
+  def retrieve(question, k=5):
+      hits = search(embed_query(question), k=k)
+      return [{"cid": h["payload"]["citation_id"], "score": h["score"],
+               "text": h["payload"]["text"]} for h in hits]
+
+  Q = "What is the deadline for offering young people a job or training under the Youth Guarantee?"
+  print("Q:", Q)
+  for r in retrieve(Q):
+      print(f"  {r['score']:.3f}  {r['cid']:<20} {r['text'][:72]!r}")
+#+END_SRC
+
+#+RESULTS:
+: Q: What is the deadline for offering young people a job or training under the Youth Guarantee?
+:   0.728  EMPL-PR-785214:1     'EXPLANATORY STATEMENT - SUMMARY OF FACTS AND FINDINGS\nThis implementatio'
+:   0.708  EMPL-PR-785214:12    'and its special report no 5/2017 of 4 April 2017 entitled ‘Youth unemplo'
+:   0.693  EMPL-PR-785214:3     'The  evaluation  of  the  implementation  of  the  reinforced  Youth  Gu'
+:   0.688  EMPL-PR-785214:5     'policy that only intervenes at the end of the chain. Combating school dr'
+:   0.683  EMPL-PR-785214:8     'in favour of young people regardless of their situation.\nNo political am'
+
+All top-5 are the Youth-Guarantee draft report — on-topic. Scores 0.68–0.73 sit barely
+above the 0.68 anisotropic baseline (drill 0, check 2): retrieval works, but raw-score
+thresholds would be a trap.
+
+** B — assemble the grounded prompt
+
+Retriever ↔ generator contract: concatenate top-k with their =citation_id= labels; the
+system prompt fixes the grounding discipline (answer ONLY from context, cite ids, else
+"I don't know"). Equal concat = the industry mean-pool; =p_eta=-weighting is the Drill-2
+switch, deferred.
+
+#+BEGIN_SRC jupyter-python :session llms :kernel llms_kernel :async yes :exports both
+  SYSTEM = (
+      "You are a research assistant for European Parliament committee documents. "
+      "Answer the question USING ONLY the numbered context passages below. "
+      "After each claim, cite the passage id in square brackets, e.g. [EMPL-PR-785214:3]. "
+      "If the answer is not contained in the context, reply with exactly: I don't know."
+  )
+
+  def assemble(question, chunks):
+      context = "\n\n".join(f"[{c['cid']}]\n{c['text']}" for c in chunks)
+      return SYSTEM, f"Context:\n\n{context}\n\n---\nQuestion: {question}"
+#+END_SRC
+
+#+RESULTS:
+
+** C — generate (Qwen, OpenAI-compatible)
+
+#+BEGIN_SRC jupyter-python :session llms :kernel llms_kernel :async yes :exports both
+  def generate(system, user, max_tokens=400):
+      body = {"model": MODEL,
+              "messages": [{"role": "system", "content": system},
+                           {"role": "user", "content": user}],
+              "max_tokens": max_tokens, "temperature": 0.0}
+      r = http_post(f"{QWEN}/chat/completions", body)
+      return r["choices"][0]["message"]["content"], r.get("usage")
+#+END_SRC
+
+#+RESULTS:
+
+** D — end to end
+
+#+BEGIN_SRC jupyter-python :session llms :kernel llms_kernel :async yes :exports both
+  def answer(question, k=5):
+      chunks = retrieve(question, k=k)
+      system, user = assemble(question, chunks)
+      text, usage = generate(system, user)
+      return text, [c["cid"] for c in chunks], usage
+
+  ans, sources, usage = answer(Q)
+  print("sources:", sources)
+  print("ANSWER:", ans)
+  print("usage:", usage["prompt_tokens"], "prompt +", usage["completion_tokens"], "completion")
+#+END_SRC
+
+#+RESULTS:
+: sources: ['EMPL-PR-785214:1', 'EMPL-PR-785214:12', 'EMPL-PR-785214:3', 'EMPL-PR-785214:5', 'EMPL-PR-785214:8']
+: ANSWER: Under the Youth Guarantee, young people under the age of 30 should be offered a job or training opportunity within four months of becoming unemployed or leaving education [EMPL-PR-785214:12].
+: usage: 1977 prompt + 47 completion
+
+The loop is closed — grounded, cited, ~15 s warm. But scrutinise the citation: the claim
+is verbatim in *=:1=* ("…every young person under the age of 30 … within four months…"),
+yet the model cited *=:12=* (a "having regard to" reference list). Content grounded,
+citation *mis-attributed* — a faithfulness bug the eval must score (groundedness and
+citation-accuracy are different axes). Bonus trap: a naive lexical check misses =:1=
+because pdf-extract wrote "four  months" (double space) — the lexical backstop must
+normalize whitespace.
