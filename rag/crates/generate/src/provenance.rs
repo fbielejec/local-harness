@@ -23,6 +23,8 @@ impl Manifest {
     pub fn from_jsonl(s: &str) -> Result<Self> {
         let mut by_doc = HashMap::new();
         for line in s.lines().filter(|l| !l.trim().is_empty()) {
+            // Fail-fast on a malformed line is an intentional policy: better to refuse to
+            // boot than to silently serve answers with mangled/missing provenance.
             let e: ManifestEntry = serde_json::from_str(line)?;
             by_doc.insert(e.doc_id.clone(), e);
         }
