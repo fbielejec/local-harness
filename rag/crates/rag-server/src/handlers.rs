@@ -1,6 +1,9 @@
+use axum::response::sse::{Event, Sse};
 use axum::response::{IntoResponse, Response};
 use axum::{extract::State, Json};
 use ep_rag_generate::prompt::{assemble, strip_think};
+use futures::stream::{self, StreamExt};
+use std::convert::Infallible;
 use std::sync::Arc;
 use crate::{openai::*, AppState};
 
@@ -47,7 +50,45 @@ fn error_response(msg: &str) -> Response {
      Json(serde_json::json!({"error": {"message": msg}}))).into_response()
 }
 
-// placeholder until Task 3.5
-async fn stream_answer(_s: Arc<AppState>, _sys: String, _usr: String, _c: Vec<String>) -> Response {
-    error_response("streaming not implemented yet")
+// A mid-stream upstream error currently ends the answer (deltas after the error are
+// dropped); the final `stop` chunk + `[DONE]` still close the SSE stream cleanly.
+async fn stream_answer(
+    state: Arc<AppState>,
+    system: String,
+    user: String,
+    cited: Vec<String>,
+) -> Response {
+    let model = state.cfg.model_id.clone();
+
+    let upstream = match state.gen.complete_stream(&state.upstream_model, &system, &user).await {
+        Ok(s) => s,
+        Err(e) => return error_response(&format!("generate stream failed: {e}")),
+    };
+
+    let model_for_deltas = model.clone();
+    let deltas = upstream.filter_map(move |item| {
+        let m = model_for_deltas.clone();
+        async move {
+            match item {
+                Ok(text) => Some(Ok::<Event, Infallible>(
+                    Event::default().data(stream_chunk(&m, &text).to_string()),
+                )),
+                Err(_) => None,
+            }
+        }
+    });
+
+    let cited_refs: Vec<&str> = cited.iter().map(String::as_str).collect();
+    let sources = state.manifest.sources_block(&cited_refs);
+    let mut tail: Vec<Result<Event, Infallible>> = Vec::new();
+    if !sources.is_empty() {
+        tail.push(Ok(Event::default().data(
+            stream_chunk(&model, &format!("\n\n{sources}")).to_string(),
+        )));
+    }
+    tail.push(Ok(Event::default().data(stream_final(&model).to_string())));
+    tail.push(Ok(Event::default().data("[DONE]")));
+
+    let body = deltas.chain(stream::iter(tail));
+    Sse::new(body).into_response()
 }
