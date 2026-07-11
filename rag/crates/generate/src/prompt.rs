@@ -20,6 +20,22 @@ pub fn assemble(question: &str, hits: &[Hit]) -> (String, String) {
     (SYSTEM.to_string(), user)
 }
 
+/// Remove `<think>…</think>` spans (ThinkingCap models). An unterminated `<think>`
+/// (e.g. a truncated stream) drops everything from the tag onward. Whitespace-trims.
+pub fn strip_think(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut rest = s;
+    while let Some(start) = rest.find("<think>") {
+        out.push_str(&rest[..start]);
+        match rest[start..].find("</think>") {
+            Some(end) => rest = &rest[start + end + "</think>".len()..],
+            None => { rest = ""; break; }
+        }
+    }
+    out.push_str(rest);
+    out.trim().to_string()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -51,5 +67,13 @@ mod tests {
     fn assemble_with_no_hits_still_produces_a_prompt() {
         let (_system, user) = assemble("anything", &[]);
         assert!(user.contains("Question: anything"));
+    }
+
+    #[test]
+    fn strip_think_removes_reasoning_block() {
+        assert_eq!(strip_think("<think>ponder</think>Answer [X:1]."), "Answer [X:1].");
+        assert_eq!(strip_think("Answer [X:1]."), "Answer [X:1].");
+        assert_eq!(strip_think("<think>\na\nb\n</think>\nHi"), "Hi");
+        assert_eq!(strip_think("before<think>never closes"), "before");
     }
 }
