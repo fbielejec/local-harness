@@ -22,7 +22,7 @@ Two heads on one system:
 2. **A diagnostic rig.** Every stage is observable, and two deliberate failure switches let us
    reproduce and *bisect* the canonical RAG failures on **real** documents (not a 3×3 toy),
    backed by an eval harness that separates retrieval quality from generation quality. This is
-   direct prep for the interview's live RAG-debugging exercise (Beat 3).
+   direct prep for the live RAG-debugging exercises.
 
 ## Scope now / non-goals
 
@@ -57,7 +57,7 @@ Rust, no C++). candle owns CLS pooling + L2-norm; the parity gate proves it matc
 - **TODO** `index`, `retrieve`, `generate`, `eval`.
 
 ### Python floor (`rag/drills/`)
-Deliberately Python (interview-prep, PyTorch): the two debugging drills + `parity_gate.py`.
+Deliberately Python (PyTorch): debugging drills + `parity_gate.py`.
 Nothing else is Python — the recon `config.py`/`fetch.py`/`smoke_qdrant.py` were removed.
 
 ### Done vs TODO
