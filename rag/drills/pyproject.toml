@@ -1,0 +1,13 @@
+[project]
+name = "ep-rag-drills"
+version = "0.1.0"
+description = "Python floor: RAG debugging drills + embedding parity gate (interview-prep artifact)"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=2.2.6",
+    "sentence-transformers>=5.6.0",
+]
+
+# The deliberate Python floor: the two debugging drills (hands-on PyTorch, the
+# interview-prep lingua franca) + the parity gate that proves the Python query
+# embedder lands in the same vector space as the Rust (fastembed) index.

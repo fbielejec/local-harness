@@ -1,0 +1,15 @@
+[package]
+name = "ep-rag-ingest"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "ingest"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+ep-rag-parse = { path = "../parse" }
+ep-rag-chunk = { path = "../chunk" }

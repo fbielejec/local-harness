@@ -1,7 +1,7 @@
 # EP-Committee RAG — Design
 
 **Date:** 2026-07-10
-**Status:** validated, implementing
+**Status:** implementing (Rust workspace) — boilerplate done, drill-connected steps pending
 **Topic:** an "almost production" retrieval-augmented-generation system over European
 Parliament committee documents (EMPL / REGI / IMCO), reusing the local Qwen `llama-server`
 as the generator — built to double as a hands-on RAG-debugging rig.
@@ -26,6 +26,50 @@ Two heads on one system:
 **In scope:** the ingestion pipeline, retrieval + grounded generation, the two debugging
 drills, and the eval harness. **Later (see Out of scope):** Open WebUI wiring, remote deploy to
 `weebeastie`, a cross-encoder reranker, multilingual ingestion.
+
+## Implementation status — maximal-Rust pivot (2026-07-10)
+
+The pipeline is a **Rust cargo workspace** (`rag/`), per the decision to maximize Rust. The two
+technical risks were retired with acceptance gates on real data:
+
+| Gate | Result | Decision |
+|------|--------|----------|
+| PDF parse — `pdf-extract` vs `pymupdf` (incl. 2-col amendment tables) | equivalent, <5% char delta, reading order preserved | pure-Rust **`pdf-extract`** (no native dep) |
+| Embed parity — `candle` vs `sentence-transformers` | **cosine = 1.00000** on all samples (passages + queries) | pure-Rust **`candle`** |
+
+**Embed pivot (important):** `fastembed` (ONNX Runtime) **cannot link on this box** — glibc 2.35,
+but its ORT prebuilt needs ≥2.38 (`__isoc23_*` undefined symbols). So we use **`candle`** (pure
+Rust, no C++). candle owns CLS pooling + L2-norm; the parity gate proves it matches
+`sentence-transformers`, so the Rust index and the Python drills share **one vector space**.
+
+**Contract correction:** bge-small uses **CLS pooling** (not mean) — pinned into the contract.
+
+### Rust workspace (`rag/crates/`)
+- `core` — `EmbeddingContract` (cross-language anchor; pinned `pooling=cls`), unit-tested.
+- `fetch` — ODP list/select/resolve/download → `manifest.jsonl` (`reqwest` blocking + retry).
+- `parse` — `pdf-extract` text extraction (+ `parse-gate` bin).
+- `chunk` — boilerplate strip + token-bounded recursive split (`text-splitter`+`tokenizers`), tested.
+- `embed` — candle BGE: CLS pool, L2-norm, query-prefix (+ `embed-gate` bin).
+- `ingest` — bin: `manifest → parse → chunk → chunks.jsonl`.
+- **TODO** `index`, `retrieve`, `generate`, `eval`.
+
+### Python floor (`rag/drills/`)
+Deliberately Python (interview-prep, PyTorch): the two debugging drills + `parity_gate.py`.
+Nothing else is Python — the recon `config.py`/`fetch.py`/`smoke_qdrant.py` were removed.
+
+### Done vs TODO
+- **DONE (boilerplate):** `core`, `fetch`, `parse`, `chunk`, `ingest`→`chunks.jsonl`; both gates.
+  12 EP PDFs → 490 chunks, all ≤512 tokens, zero boilerplate leakage.
+- **TODO (tomorrow, drill-connected):** embed chunks + **upsert to Qdrant with the
+  contract-stamped payload** (Drill-1 surface); `retrieve` + the assembly/**fusion switch**
+  (Drill-2 surface); grounded `generate`; the retriever↔generator contract; the two Python
+  drills; the eval harness.
+
+### Interface (from the Rust/Qwen↔Qdrant research)
+Orchestrator-mediated now (Qwen = pure generator over `/v1/chat/completions`); tool-calling later
+(both pure Rust via `async-openai` + `qdrant-client`). Open WebUI eventually sits **in front** of
+the Rust pipeline as the chat UI, not as the retriever. Avoid `mcp-server-qdrant` on the hot path
+(its FastEmbed/own-payload design breaks our prefix + hybrid + citation contract).
 
 ## Decisions (what & why)
 

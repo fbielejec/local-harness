@@ -142,10 +142,39 @@ preserved (reasoning 1.50/5 ≥ 1.00 baseline; agent-pack **5/5** = baseline). F
 
 Running list of follow-ups (check off as done; newest at the bottom).
 
-- [ ] RAG. Embedding model, retrieval index split per user.
+- [~] **RAG(s)** — EP-committee RAG, maximal-Rust. Full design + status:
+  `docs/plans/2026-07-10-ep-committee-rag-design.md`. Code: `rag/` (cargo workspace).
+  - **Goal:** grounded, cited Q&A over EMPL/REGI/IMCO EP committee PDFs (for spouse's MEP
+    office) + a diagnostic rig for the RAG-debugging interview (Beat 3 / two drills).
+  - **Stack:** Qdrant v1.18 (`deploy/qdrant/`, telemetry off) · BGE-small embeddings ·
+    generator = the existing `llama-server` (OpenAI-compatible `:8080/v1`). Orchestrator-mediated
+    RAG; Open WebUI later as a chat UI *in front of* the Rust pipeline, not as the retriever.
+  - **[x] Boilerplate done (2026-07-10, all Rust):** `core` (embedding contract), `fetch`
+    (ODP API → PDFs + `manifest.jsonl`), `parse` (pdf-extract), `chunk` (token-bounded +
+    boilerplate strip), `ingest` → `chunks.jsonl`. 12 PDFs → 490 chunks, all ≤512 tok, 0 leak.
+  - **[x] Two acceptance gates passed:** PDF parse `pdf-extract` ≈ `pymupdf` (incl. 2-col
+    amendment tables); embed parity `candle` == `sentence-transformers` **cosine = 1.0** — so the
+    Rust index and the Python-drill query embedder share one vector space.
+  - **Don't relearn (key decisions):**
+    - Embed = **candle** (pure Rust), NOT fastembed — its ONNX prebuilt needs glibc ≥2.38, this
+      box is 2.35 (`__isoc23_*` undefined-symbol link error). candle links cleanly, no C++.
+    - bge-small uses **CLS pooling** (not mean); the query gets the instruction prefix, passages
+      don't (that asymmetry is Drill-1's surface).
+    - Parse = pure-Rust `pdf-extract` (no pdfium native dep needed).
+  - **[ ] TODO — drill-connected, next hand-holding session (deliberately left for deep understanding):**
+    - `index`: embed chunks (candle) + upsert to Qdrant with the **contract-stamped payload** —
+      this embed→index boundary is **Drill 1** (embedding mismatch).
+    - `retrieve`: query embed → top-k → context assembly with the **fusion switch** (mean-pool vs
+      p_eta-weighted) = **Drill 2** (confidence-blind fusion).
+    - `generate`: grounded, cited answer via the llama-server API; the retriever↔generator contract.
+    - The two Python drills (`rag/drills/`, PyTorch) + eval harness (recall@k/MRR vs faithfulness).
+  - **Run:** `cd deploy/qdrant && docker compose up -d` · `cd rag && cargo run -p ep-rag-fetch
+    --bin fetch -- 2` · `cargo run -p ep-rag-ingest --bin ingest` · parity gate:
+    `cargo run -p ep-rag-embed --bin embed-gate && uv run --project drills python drills/parity_gate.py`.
+  - [ ] org documents (my knowledge db) — later, same pipeline.
 - [ ] Base model change. Hardware is too weak for coding specific model, a generalist geared
   towards working with text, translations, information retrieval (web search and RAG).
-- [ ] Evaluate qwen-family "ThinkingCap models" tweaked towards lower token consumption per task:
+  - [ ] Evaluate qwen-family "ThinkingCap models" tweaked towards lower token consumption per task:
   https://paperswithcode.co/paper/102599
 - [~] **Basic security via `~/.qwen/settings.json`** — harden the Qwen-Code client for the
   self-sovereignty goal. Schema note (verified against installed **qwen 0.19.8**): the file

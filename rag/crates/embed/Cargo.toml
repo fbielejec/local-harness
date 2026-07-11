@@ -1,0 +1,20 @@
+[package]
+name = "ep-rag-embed"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "embed-gate"
+path = "src/bin/gate.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+ep-rag-core = { path = "../core" }
+# PURE-RUST embeddings (no ONNX Runtime / no C++). Pivoted here from fastembed
+# because its ORT prebuilt needs glibc >= 2.38 and this box is glibc 2.35.
+candle-core = "0.9"
+candle-nn = "0.9"
+candle-transformers = "0.9"
+tokenizers = "0.21"
+hf-hub = "0.4"

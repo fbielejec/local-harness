@@ -1,3 +1,6 @@
+# Rust build artifacts
+target/
+
 # Python env + caches
 .venv/
 __pycache__/

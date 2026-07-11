@@ -1,0 +1,12 @@
+[package]
+name = "ep-rag-fetch"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# Blocking HTTP: this is a batch job (I/O-bound), so a synchronous client keeps
+# the code simple; reqwest follows the 302 to the file store by default.
+reqwest = { version = "0.12", features = ["blocking", "json"] }

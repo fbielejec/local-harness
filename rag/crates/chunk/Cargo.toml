@@ -1,0 +1,14 @@
+[package]
+name = "ep-rag-chunk"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# Recursive, token-aware splitting (respects paragraph/sentence boundaries).
+text-splitter = { version = "0.27", features = ["tokenizers"] }
+tokenizers = "0.21"
+hf-hub = "0.4"
+regex = "1"
