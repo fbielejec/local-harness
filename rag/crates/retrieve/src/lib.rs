@@ -23,6 +23,10 @@ fn qval_to_json(v: &QValue) -> serde_json::Value {
         Some(Kind::StructValue(s)) => {
             J::Object(s.fields.iter().map(|(k, v)| (k.clone(), qval_to_json(v))).collect())
         }
+        // Deliberate lossy default: our index only ever writes the kinds above, so any
+        // other kind (e.g. NullValue) — and `kind: None` — maps to JSON null rather than
+        // failing. A field we care about turning up null would surface downstream in
+        // `hit_from_payload` (it requires citation_id + text to be present strings).
         _ => J::Null,
     }
 }
@@ -94,6 +98,11 @@ impl Retriever {
             .await
             .context("qdrant search")?;
 
+        // INVARIANT: the index (crates/index) stamps citation_id + text onto every
+        // point, so `hit_from_payload` returns Some for all of them and `filter_map`
+        // drops nothing. If the payload schema ever changed and a point lost either
+        // field, that point would be silently dropped here — degrading recall
+        // invisibly. Guarded upstream by the contract-drift assert on serve start.
         Ok(resp
             .result
             .into_iter()
@@ -164,6 +173,51 @@ mod tests {
         assert_eq!(j["citation_id"], serde_json::json!("X:1"));
         assert_eq!(j["chunk_index"], serde_json::json!(1));
         assert_eq!(j["contract_normalized"], serde_json::json!(true));
+    }
+
+    #[test]
+    fn qval_to_json_double_is_value_preserving() {
+        use qdrant_client::qdrant::{value::Kind, Value};
+        let v = Value { kind: Some(Kind::DoubleValue(0.728)) };
+        assert_eq!(qval_to_json(&v), serde_json::json!(0.728));
+    }
+
+    #[test]
+    fn qval_to_json_list_recurses() {
+        use qdrant_client::qdrant::{value::Kind, ListValue, Value};
+        let list = ListValue {
+            values: vec![
+                Value { kind: Some(Kind::StringValue("a".into())) },
+                Value { kind: Some(Kind::IntegerValue(2)) },
+            ],
+        };
+        let v = Value { kind: Some(Kind::ListValue(list)) };
+        assert_eq!(qval_to_json(&v), serde_json::json!(["a", 2]));
+    }
+
+    #[test]
+    fn qval_to_json_struct_recurses() {
+        use qdrant_client::qdrant::{value::Kind, Struct, Value};
+        let mut fields = std::collections::HashMap::new();
+        fields.insert("k".to_string(), Value { kind: Some(Kind::BoolValue(false)) });
+        let v = Value { kind: Some(Kind::StructValue(Struct { fields })) };
+        assert_eq!(qval_to_json(&v), serde_json::json!({ "k": false }));
+    }
+
+    #[test]
+    fn qval_to_json_null_and_none_map_to_json_null() {
+        use qdrant_client::qdrant::{value::Kind, Value};
+        // explicit NullValue kind -> null
+        let null = Value { kind: Some(Kind::NullValue(0)) };
+        assert_eq!(qval_to_json(&null), serde_json::Value::Null);
+        // absent kind (kind: None) -> null (the catch-all)
+        let none = Value { kind: None };
+        assert_eq!(qval_to_json(&none), serde_json::Value::Null);
+    }
+
+    #[test]
+    fn doc_id_of_returns_whole_string_without_colon() {
+        assert_eq!(doc_id_of("EMPL-PR-785214"), "EMPL-PR-785214");
     }
 
     #[tokio::test]
