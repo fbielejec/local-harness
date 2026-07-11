@@ -143,34 +143,55 @@ preserved (reasoning 1.50/5 ≥ 1.00 baseline; agent-pack **5/5** = baseline). F
 Running list of follow-ups (check off as done; newest at the bottom).
 
 - [~] **RAG(s)** — EP-committee RAG, maximal-Rust. Full design + status:
-  `docs/plans/2026-07-10-ep-committee-rag-design.md`. Code: `rag/` (cargo workspace).
+  `docs/plans/2026-07-10-ep-committee-rag-design.md`. Code: `rag/` (cargo workspace, `rag/Makefile`).
   - **Goal:** grounded, cited Q&A over EMPL/REGI/IMCO EP committee PDFs (for spouse's MEP
     office) + a diagnostic rig for the RAG-debugging interview (Beat 3 / two drills).
   - **Stack:** Qdrant v1.18 (`deploy/qdrant/`, telemetry off) · BGE-small embeddings ·
     generator = the existing `llama-server` (OpenAI-compatible `:8080/v1`). Orchestrator-mediated
-    RAG; Open WebUI later as a chat UI *in front of* the Rust pipeline, not as the retriever.
-  - **[x] Boilerplate done (2026-07-10, all Rust):** `core` (embedding contract), `fetch`
-    (ODP API → PDFs + `manifest.jsonl`), `parse` (pdf-extract), `chunk` (token-bounded +
-    boilerplate strip), `ingest` → `chunks.jsonl`. 12 PDFs → 490 chunks, all ≤512 tok, 0 leak.
-  - **[x] Two acceptance gates passed:** PDF parse `pdf-extract` ≈ `pymupdf` (incl. 2-col
-    amendment tables); embed parity `candle` == `sentence-transformers` **cosine = 1.0** — so the
-    Rust index and the Python-drill query embedder share one vector space.
-  - **Don't relearn (key decisions):**
+    RAG; Open WebUI later as a chat UI *in front of* the Rust pipeline, not as the retriever
+    (integration design: `docs/plans/2026-07-11-openwebui-rag-integration-design.md`).
+  - **[x] Ingestion (all Rust):** `core`·`fetch`·`parse`·`chunk`·`ingest` → `chunks.jsonl`.
+    12 PDFs → 490 chunks, all ≤512 tok, 0 boilerplate leak. Both acceptance gates pass
+    (pdf-extract≈pymupdf; candle==sentence-transformers **cosine 1.0** → one vector space).
+  - **[x] `index` (2026-07-11):** candle passage-embed → Qdrant upsert with the **contract-stamped
+    payload**. Collection `ep_committee_docs`, 490 points, single dense vector (384, cosine),
+    deterministic UUIDv5 ids (idempotent re-index). Pure core unit-tested (`point_id`, `chunk_payload`).
+  - **[x] `retrieve`+`generate` — hand-stitched (2026-07-11):** `rag/notebooks/rag_query.org`
+    (org-babel, `llms_kernel`). Full loop works: embed_query(prefix) → Qdrant top-k → grounded
+    prompt (cite `citation_id`, "I don't know") → Qwen → cited answer (~15 s warm). This notebook
+    is the **executable spec** for the Rust `retrieve`/`generate` crates.
+  - **[x] Drill 0 — index health (2026-07-11):** `rag/drills/drill0_index_health.org`. Integrity +
+    separation/anisotropy + near-dups + self-retrieval probe. Index healthy.
+  - **Don't relearn (key decisions + findings):**
     - Embed = **candle** (pure Rust), NOT fastembed — its ONNX prebuilt needs glibc ≥2.38, this
-      box is 2.35 (`__isoc23_*` undefined-symbol link error). candle links cleanly, no C++.
-    - bge-small uses **CLS pooling** (not mean); the query gets the instruction prefix, passages
-      don't (that asymmetry is Drill-1's surface).
-    - Parse = pure-Rust `pdf-extract` (no pdfium native dep needed).
-  - **[ ] TODO — drill-connected, next hand-holding session (deliberately left for deep understanding):**
-    - `index`: embed chunks (candle) + upsert to Qdrant with the **contract-stamped payload** —
-      this embed→index boundary is **Drill 1** (embedding mismatch).
-    - `retrieve`: query embed → top-k → context assembly with the **fusion switch** (mean-pool vs
-      p_eta-weighted) = **Drill 2** (confidence-blind fusion).
-    - `generate`: grounded, cited answer via the llama-server API; the retriever↔generator contract.
-    - The two Python drills (`rag/drills/`, PyTorch) + eval harness (recall@k/MRR vs faithfulness).
-  - **Run:** `cd deploy/qdrant && docker compose up -d` · `cd rag && cargo run -p ep-rag-fetch
-    --bin fetch -- 2` · `cargo run -p ep-rag-ingest --bin ingest` · parity gate:
-    `cargo run -p ep-rag-embed --bin embed-gate && uv run --project drills python drills/parity_gate.py`.
+      box is 2.35 (`__isoc23_*` link error). candle links cleanly, no C++.
+    - bge-small uses **CLS pooling** (not mean); query gets the instruction prefix, passages don't.
+    - Parse = pure-Rust `pdf-extract` (no pdfium native dep).
+    - **`make` runs use `--release`** — candle in debug is 10–50× slower (the 490-chunk index went
+      44 min debug → ~1–2 min release).
+    - **Self-retrieval probe detects *encoder* drift (pooling/model), NOT the dropped prefix** —
+      with query=passage-text, dropping the prefix makes `q`≈`d` (self-query *more* perfect). The
+      prefix bug shows only in **recall@k on real (different-text) queries**.
+    - **Index is anisotropic** (mean pairwise cosine 0.68, single-domain; participation ratio
+      ~45/384) → retrieval works but **don't threshold raw cosine** (relevant hits sit 0.68–0.73).
+    - **Faithfulness has two axes:** content-groundedness vs citation-accuracy — observed a *correct
+      but mis-attributed* citation (grounded in `:1`, model cited `:12`). A lexical check must
+      **normalize whitespace** (pdf-extract emits `"four  months"`).
+    - **Drill-2 substrate located:** `EMPL-PR-612058:1 ~ IMCO-PR-773060:1` at **cosine 1.000** —
+      byte-identical draft-report preamble across two committees.
+  - **[ ] NEXT (handoff) — the two named debugging drills**, following the toy drill examples in the
+    prep doc (`~/CloudStation/TeXProjects/CVinterview_prep_aiinfra.org`) + Drill 0's pattern:
+    - **Drill 1 — embedding mismatch:** break the query recipe (drop prefix / wrong pooling), watch
+      **recall@k** collapse on a golden set; contract-stamp catches it; self-retrieval flags *encoder*
+      drift specifically.
+    - **Drill 2 — confidence-blind fusion:** the fusion switch (mean-pool vs `p_eta`-weighted) on a
+      query whose top-k pulls the cosine-1.000 boilerplate twin; dupes outvote gold; rerank/MMR/dedup
+      restore it, faithfulness moving in step.
+  - **[ ] Then:** harden `retrieve`/`generate` into Rust crates (+ `rag-server`, OpenAI-compatible
+    front for Open WebUI) · eval harness (recall@k/MRR **vs** groundedness+citation-accuracy) ·
+    Qdrant→weebeastie + Open WebUI wiring (the integration design doc).
+  - **Run:** `cd rag && make pipeline` (qdrant-up → fetch → ingest → index) · `make parity` ·
+    drills/notebook in Emacs (`llms_kernel`) or `uv run --project drills python drills/…`.
   - [ ] org documents (my knowledge db) — later, same pipeline.
 - [ ] Base model change. Hardware is too weak for coding specific model, a generalist geared
   towards working with text, translations, information retrieval (web search and RAG).

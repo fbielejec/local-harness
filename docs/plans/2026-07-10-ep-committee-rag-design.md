@@ -1,7 +1,10 @@
 # EP-Committee RAG — Design
 
 **Date:** 2026-07-10
-**Status:** implementing (Rust workspace) — boilerplate done, drill-connected steps pending
+**Status:** `index` built (490 pts) + query path hand-stitched (`rag/notebooks/rag_query.org`)
++ Drill 0 index-health done — 2026-07-11. The two named drills (embedding-mismatch,
+confidence-blind fusion) are next; then Rust `retrieve`/`generate` crates + eval + Open WebUI
+wiring (`docs/plans/2026-07-11-openwebui-rag-integration-design.md`). Live checklist: `CLAUDE.md` TODOs.
 **Topic:** an "almost production" retrieval-augmented-generation system over European
 Parliament committee documents (EMPL / REGI / IMCO), reusing the local Qwen `llama-server`
 as the generator — built to double as a hands-on RAG-debugging rig.
@@ -260,4 +263,5 @@ docs/plans/2026-07-10-ep-committee-rag-design.md   (this file)
 
 - Org doc RAG section: `~/CloudStation/LLMs/research/LLMs_README.org` (Lewis et al. 2020
   marginalization; industry retrieve-then-concatenate; gradient decoupling).
+- Prep doc RAG debugging drills: `~/CloudStation/TeXProjects/CV/interview_prep_aiinfra.org`
 - Verified EP source endpoints: research pass 2026-07-10 (this design's §Ingestion).

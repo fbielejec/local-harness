@@ -281,6 +281,35 @@ Calling* if you ever need to inspect it.
 afterwards the volume is authoritative, so change settings in the Admin Panel (or wipe the
 `open-webui` volume to re-seed).
 
+# EP-Committee RAG — 2026-07-11
+
+A grounded, cited Q&A assistant over EMPL/REGI/IMCO committee PDFs, doubling as a RAG-debugging
+rig for the interview (Beat 3). Maximal-Rust ingestion + index; org-babel notebooks for the drills
+and the hand-stitched query path. Full design: `docs/plans/2026-07-10-ep-committee-rag-design.md`.
+
+**Stack:** Qdrant v1.18 (`deploy/qdrant/`) · `BAAI/bge-small-en-v1.5` embeddings (candle, pure
+Rust) · generator = the loopback `llama-server` (`:8080/v1`). One code path, two deploys via env.
+
+**Run (from `rag/`; all run targets are `--release` — candle in debug is 10–50× slower):**
+```bash
+make pipeline        # qdrant-up → fetch → ingest → index   (12 PDFs → 490 chunks → Qdrant)
+make parity          # candle vs sentence-transformers embed parity gate (cosine 1.0)
+make qdrant-status   # collection point count · make help for all targets
+```
+
+**State (2026-07-11):**
+- **Index built** — collection `ep_committee_docs`, **490 points**; each carries full provenance +
+  `text` + the six `contract_*` fields (the embedding contract stamped per point, so a mismatched
+  serve can be refused).
+- **Query path hand-stitched** — `rag/notebooks/rag_query.org`: embed_query → Qdrant top-k →
+  grounded prompt → Qwen → cited answer (~15 s warm). The executable spec for the Rust
+  `retrieve`/`generate` crates.
+- **Drill 0 (index health)** — `rag/drills/drill0_index_health.org`: integrity, separation
+  (anisotropic cone, mean cosine 0.68), near-dups, self-retrieval probe.
+- **Next** — the two named debugging drills (embedding-mismatch, confidence-blind fusion), then
+  Rust hardening + eval harness + Open WebUI wiring
+  (`docs/plans/2026-07-11-openwebui-rag-integration-design.md`).
+
 # Docs
 
 - `CLAUDE.md` — orientation for agents (hardware, ops, findings, TODOs).
@@ -289,3 +318,6 @@ afterwards the volume is authoritative, so change settings in the Admin Panel (o
 - `docs/plans/2026-07-06-quality-gated-autoperf-design.md` — the quality-gate loop design.
 - `docs/autoperf-reports/2026-07-06-autoperf-report.md` — tuning results (every config tried).
 - `evals/` — the coding-quality gate · `results.tsv` — raw per-config numbers.
+- `docs/plans/2026-07-10-ep-committee-rag-design.md` — EP-committee RAG design + status.
+- `docs/plans/2026-07-11-openwebui-rag-integration-design.md` — wiring the RAG behind Open WebUI (design only).
+- `docs/plans/2026-07-08-lan-chat-frontend-openwebui-design.md` — the Open WebUI chat frontend.
