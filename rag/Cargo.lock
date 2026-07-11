@@ -744,6 +744,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ep-rag-generate"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "ep-rag-retrieve",
+ "futures",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "ep-rag-index"
 version = "0.1.0"
 dependencies = [
