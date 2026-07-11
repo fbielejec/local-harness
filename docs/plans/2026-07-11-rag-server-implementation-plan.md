@@ -2,6 +2,15 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
+**Status (2026-07-11):** **Phases 0–3 DONE** — the three crates (`ep-rag-retrieve`,
+`ep-rag-generate`, `ep-rag-server`) are built via subagent-driven TDD on branch `rag-server`
+(commits `faf6c64`…`b274400`): 30 unit tests green, warning-free `cargo build --workspace`, per-unit
+spec + code-quality reviews and a final holistic review all passed. Two code-review fix rounds
+landed (byte-buffer UTF-8-safe SSE parser; interrupted-stream marking + no-answer Sources
+suppression + live-contract assert). **NOT yet run end-to-end** — no live Qdrant/llama-server in the
+build env, so the live-path curl checks in each task and all of **Phase 4 (deploy) remain TODO** —
+that's the next work and is manual (weebeastie ssh + running services).
+
 **Goal:** Build `rag-server` — an OpenAI-compatible HTTP service that productizes the hand-stitched
 `rag/notebooks/rag_query.org` loop (embed_query → Qdrant top-k → grounded prompt → Qwen → cited
 answer), so Open WebUI can register it as a second model ("EP Committees, grounded") and any

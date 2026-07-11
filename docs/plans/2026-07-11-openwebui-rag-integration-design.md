@@ -1,8 +1,13 @@
 # Open WebUI ↔ EP-Committee RAG — Integration Design
 
 **Date:** 2026-07-11
-**Status:** **design only — NO implementation yet.** Blocks on the Rust `retrieve`/`generate`
-crates (currently hand-stitched in `rag/notebooks/rag_query.org`) and the Qdrant→weebeastie move.
+**Status:** **Option A built (crates), deploy pending.** The Rust `retrieve`/`generate`/`rag-server`
+crates that this design blocked on are now implemented, unit-tested (30 green), and code-reviewed on
+branch `rag-server` (build plan: `2026-07-11-rag-server-implementation-plan.md`, Phases 0–3). What
+remains is **Phase 4**: the Qdrant→weebeastie snapshot move, running `rag-server` as a systemd unit,
+and the Open WebUI second-connection wiring — none of it run end-to-end yet. Provenance decision
+resolved: **serve-time join (option (b) below)** — `citation_id → doc_id → manifest.pdf_url` in
+`rag-server`, no re-index (implemented in `ep-rag-generate`'s `provenance::Manifest`).
 **Topic:** wire the EP-committee RAG (Qdrant + our bge retriever + grounded Qwen) *behind* the
 Open WebUI chat at http://192.168.1.22:3000, so any household user gets grounded, cited answers.
 This is the concrete follow-through on the openwebui plan's "Document RAG: off for now — enable
@@ -80,11 +85,14 @@ the restored collection is self-describing):
 ## Citations & provenance UX (household-facing)
 
 The answer carries inline `[committee-type-num:idx]` markers. For non-technical users the
-`rag-server` should also append a **Sources** block: each cited `citation_id` → document title
-(payload) → the source PDF URL. **Gap to decide:** `source_url` is *not* in the current payload
-(only `doc_id`, `committee`, `title`, `doc_type`, `chunk_index`, `n_chunks`, lengths, contract).
-Options: (a) stamp `source_url` at index time (needs a re-index) or (b) join
-`citation_id → doc_id → manifest.pdf_url` at serve time in `rag-server`. (b) avoids a re-index.
+`rag-server` also appends a **Sources** block: each cited `citation_id` → document title → source
+PDF URL. **Gap RESOLVED → option (b), serve-time join (no re-index):** `source_url` is *not* in the
+payload (only `doc_id`, `committee`, `title`, `doc_type`, `chunk_index`, `n_chunks`, lengths,
+contract), so `ep-rag-generate`'s `provenance::Manifest` loads `data/manifest.jsonl` at startup and
+joins `citation_id → doc_id → manifest.pdf_url` per request. The block dedupes by document
+(first-seen order) and is **suppressed on an "I don't know" non-answer** and on an interrupted
+stream, so provenance is never falsely attributed. (Rejected (a) — stamping `source_url` at index
+time would force a re-embed of all 490 chunks.)
 
 ## Access, trust, latency
 
