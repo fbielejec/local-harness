@@ -1,0 +1,13 @@
+[package]
+name = "ep-rag-generate"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+ep-rag-retrieve = { path = "../retrieve" }
+reqwest = { workspace = true }
+futures = { workspace = true }
+tokio = { workspace = true }
