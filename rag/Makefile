@@ -13,7 +13,10 @@ CARGO_RUN := cargo run --release
 
 .DEFAULT_GOAL := help
 .PHONY: help qdrant-up qdrant-down qdrant-logs qdrant-status \
-        fetch ingest index parse-gate embed-gate parity pipeline test
+	fetch ingest index parse-gate embed-gate parity pipeline test
+
+help: ## list targets
+	@grep -hE '^[a-zA-Z0-9_-]+:.*##' $(MAKEFILE_LIST) | sort | awk 'BEGIN{FS=":.*## "}{printf "  \033[36m%-13s\033[0m %s\n", $$1, $$2}'
 
 # --- infra ------------------------------------------------------------------
 qdrant-up: ## start Qdrant (Docker, detached)
@@ -54,6 +57,3 @@ pipeline: qdrant-up fetch ingest index ## run the whole ingestion pipeline end t
 
 test: ## cargo test across the workspace
 	cargo test
-
-help: ## list targets
-	@grep -hE '^[a-zA-Z0-9_-]+:.*##' $(MAKEFILE_LIST) | sort | awk 'BEGIN{FS=":.*## "}{printf "  \033[36m%-13s\033[0m %s\n", $$1, $$2}'

@@ -1,0 +1,221 @@
+#+TITLE: Drill 0 — Index Health & Separation
+
+* Drill 0 — index health & separation
+
+Poke the store before the named drills. Toy analog (the marginalization example): we
+eyeballed =D ≈ I_3= — docs unit-norm AND mutually orthogonal (Gram =D·Dᵀ = I=),
+eyeballable at 3×3. On a REAL store that literal target is impossible (490 vectors in
+384-D can't be orthogonal; related chunks SHOULD be similar), so "healthy & well
+separated" becomes a menu of statistics + one probe:
+
+1. *integrity* — norms ~1, no zero/NaN, right count & dim, ids unique
+2. *separation* — spread of pairwise cosines / effective rank (not a collapsed cone)
+3. *near-dups* — mass of cosine>~0.95 pairs (the Drill-2 substrate)
+4. *self-retrieval probe* — each passage, re-embedded AS A QUERY, returns itself
+   (the label-free generalization of =D ≈ I=)
+
+Runnable in Emacs: =C-c C-c= each block; the shared =:session= keeps =V=, =cids=,
+=texts= alive across blocks.
+
+** Setup — pull the whole index
+
+#+BEGIN_SRC jupyter-python :session llms :kernel llms_kernel :async yes :exports both
+  import json, urllib.request
+  import numpy as np
+
+  QDRANT, COLLECTION = "http://localhost:6333", "ep_committee_docs"
+
+  def _post(path, body):
+      req = urllib.request.Request(QDRANT + path, data=json.dumps(body).encode(),
+                                   headers={"content-type": "application/json"})
+      return json.load(urllib.request.urlopen(req))["result"]
+
+  def fetch_all():
+      points, offset = [], None
+      while True:
+          body = {"limit": 256, "with_vector": True, "with_payload": True}
+          if offset is not None: body["offset"] = offset
+          r = _post(f"/collections/{COLLECTION}/points/scroll", body)
+          points += r["points"]
+          offset = r.get("next_page_offset")
+          if offset is None: break
+      return points
+
+  pts   = fetch_all()
+  V     = np.array([p["vector"] for p in pts], dtype=np.float32)   # [N, 384], unit-norm
+  ids   = [p["id"] for p in pts]                                   # qdrant point uuids
+  cids  = [p["payload"]["citation_id"] for p in pts]
+  texts = [p["payload"]["text"] for p in pts]
+  print(f"pulled {V.shape[0]} vectors, dim {V.shape[1]}")
+#+END_SRC
+
+#+RESULTS:
+: pulled 490 vectors, dim 384
+
+** Check 1 — integrity (the "unit-norm" half of D ≈ I)
+
+#+BEGIN_SRC jupyter-python :session llms :kernel llms_kernel :async yes :exports both
+  norms = np.linalg.norm(V, axis=1)
+  print(f"norm         min={norms.min():.4f}  max={norms.max():.4f}  mean={norms.mean():.4f}")
+  print(f"degenerate   zero={(norms < 1e-6).sum()}   nan={int(np.isnan(V).any(axis=1).sum())}")
+  print(f"ids unique   {len(set(cids))} / {len(cids)}")
+#+END_SRC
+
+#+RESULTS:
+: norm         min=1.0000  max=1.0000  mean=1.0000
+: degenerate   zero=0   nan=0
+: ids unique   490 / 490
+
+Norms are ~1 partly because Qdrant normalizes for cosine on upsert — the real catch is
+a zero vector (empty chunk) or an id collision dropping the count. Both clean.
+
+** Check 2 — separation & anisotropy (the "distinct directions" half)
+
+#+BEGIN_SRC jupyter-python :session llms :kernel llms_kernel :async yes :exports both
+  S  = V @ V.T                          # cosine matrix (V unit-norm)
+  iu = np.triu_indices(V.shape[0], k=1) # unique off-diagonal pairs
+  off = S[iu]
+  p50, p90, p99 = np.percentile(off, [50, 90, 99])
+  print(f"cosine       p50={p50:.3f}  p90={p90:.3f}  p99={p99:.3f}  mean={off.mean():.3f}  max={off.max():.3f}")
+  print(f"anisotropy   ||mean(V)|| = {np.linalg.norm(V.mean(0)):.3f}   (0 isotropic -> 1 cone)")
+  ev  = np.linalg.svd(V - V.mean(0), compute_uv=False) ** 2
+  pr  = ev.sum() ** 2 / (ev ** 2).sum()
+  d90 = int(np.searchsorted(np.cumsum(ev) / ev.sum(), 0.90)) + 1
+  print(f"effective    participation ratio = {pr:.1f} / {V.shape[1]}   (90% var in {d90})")
+#+END_SRC
+
+#+RESULTS:
+: cosine       p50=0.679  p90=0.757  p99=0.832  mean=0.677  max=1.000
+: anisotropy   ||mean(V)|| = 0.823   (0 isotropic -> 1 cone)
+: effective    participation ratio = 45.5 / 384   (90% var in 124)
+
+=||mean(V)|| = 0.823= and mean cosine =0.677= are the same fact (=0.823² = 0.677=): a
+tight cone. Expected for a single-domain legislative corpus + transformer anisotropy;
+the consequence is compressed contrast (baseline ~0.68) — do NOT threshold raw cosine.
+Effective ~45–124 of 384 dims: concentrated but ample to separate 490 chunks.
+
+** Check 3 — near-duplicates (the Drill-2 substrate)
+
+#+BEGIN_SRC jupyter-python :session llms :kernel llms_kernel :async yes :exports both
+  thr = 0.95
+  ndup = int((off > thr).sum())
+  print(f"near-dups (cosine > {thr}): {ndup} / {off.size} pairs")
+  for k in np.argsort(off)[::-1][:5]:
+      i, j = iu[0][k], iu[1][k]
+      print(f"  {off[k]:.3f}  {cids[i]:<20} ~ {cids[j]}")
+#+END_SRC
+
+#+RESULTS:
+: near-dups (cosine > 0.95): 7 / 119805 pairs
+:   1.000  EMPL-PR-612058:1     ~ IMCO-PR-773060:1
+:   0.972  REGI-AD-782352:102   ~ REGI-AD-782352:101
+:   0.964  IMCO-AD-765339:7     ~ IMCO-AD-765339:8
+:   0.957  REGI-AD-782352:104   ~ IMCO-AD-778358:34
+:   0.957  REGI-AD-782352:30    ~ REGI-AD-782352:29
+
+#+BEGIN_SRC jupyter-python :session llms :kernel llms_kernel :async yes :exports both
+print("EMPL-PR-612058:1:\n", [p for p in pts if p["payload"]["citation_id"] == "EMPL-PR-612058:1"][0]["payload"]["text"])
+
+print("IMCO-PR-773060:1:\n", [p for p in pts if p["payload"]["citation_id"] == "IMCO-PR-773060:1"][0]["payload"]["text"])
+#+END_SRC
+
+#+RESULTS:
+#+begin_example
+  EMPL-PR-612058:1:
+   are indicated in bold italics in both columns. New text is indicated in bold
+  italics in the right-hand column.
+  The first and second lines of the header of each amendment identify the
+  relevant part of the draft act under consideration. If an amendment pertains to
+  an existing act that the draft act is seeking to amend, the amendment heading
+  includes a third line identifying the existing act and a fourth line identifying
+  the provision in that act that Parliament wishes to amend.
+  Amendments by Parliament in the form of a consolidated text
+  New text is highlighted in bold italics. Deletions are indicated using either
+  the ▌symbol or strikeout. Replacements are indicated by highlighting the
+  new text in bold italics and by deleting or striking out the text that has been
+  replaced.
+  By way of exception, purely technical changes made by the drafting
+  departments in preparing the final text are not highlighted.
+  CONTENTS
+  Page
+  DRAFT EUROPEAN PARLIAMENT LEGISLATIVE RESOLUTION ................................5
+  EXPLANATORY STATEMENT.........................................................................................42
+  IMCO-PR-773060:1:
+   are indicated in bold italics in both columns. New text is indicated in bold
+  italics in the right-hand column.
+  The first and second lines of the header of each amendment identify the
+  relevant part of the draft act under consideration. If an amendment pertains to
+  an existing act that the draft act is seeking to amend, the amendment heading
+  includes a third line identifying the existing act and a fourth line identifying
+  the provision in that act that Parliament wishes to amend.
+  Amendments by Parliament in the form of a consolidated text
+  New text is highlighted in bold italics. Deletions are indicated using either
+  the ▌symbol or strikeout. Replacements are indicated by highlighting the
+  new text in bold italics and by deleting or striking out the text that has been
+  replaced.
+  By way of exception, purely technical changes made by the drafting
+  departments in preparing the final text are not highlighted.
+  CONTENTS
+  Page
+  DRAFT EUROPEAN PARLIAMENT LEGISLATIVE RESOLUTION .................................5
+  EXPLANATORY STATEMENT ............................................................................................16
+#+end_example
+
+Two flavors: adjacent-same-doc (=:101~:102=) are the 50-token chunk overlap, benign.
+Cross-doc / cross-committee (=EMPL-PR-612058:1 ~ IMCO-PR-773060:1= at *1.000*) is shared
+boilerplate across different documents — the real Drill-2 danger.
+
+** Check 4 — self-retrieval probe (the real "eyeball D ≈ I")   [WE BUILD THIS TOGETHER]
+
+Design = option (b): re-embed each passage's =text= AS A QUERY (with the bge prefix) and
+search the index — does it return its OWN point at rank 1? Tests integrity AND that the
+query recipe lands on the passage manifold = the label-free Drill-1 detector. Once green,
+we break it (drop the prefix) to preview Drill 1.
+
+Setup — a self-contained query embedder (same recipe as the README =embed= walkthrough):
+
+#+BEGIN_SRC jupyter-python :session llms :kernel llms_kernel :async yes :exports both
+  import torch, torch.nn.functional as F
+  from transformers import AutoTokenizer, AutoModel
+
+  _M = "BAAI/bge-small-en-v1.5"
+  _QPREFIX = "Represent this sentence for searching relevant passages:"
+  _tok = AutoTokenizer.from_pretrained(_M)
+  _model = AutoModel.from_pretrained(_M).eval()
+
+  @torch.no_grad()
+  def embed_query(text, prefix=_QPREFIX):        # prefix -> CLS -> L2 (queries only)
+      enc = _tok([f"{prefix} {text}".strip()], padding=True, truncation=True,
+                 max_length=512, return_tensors="pt")
+      cls = _model(**enc).last_hidden_state[:, 0]
+      return F.normalize(cls, p=2, dim=1)[0].numpy()
+
+  print("embed_query ready:", embed_query(texts[0]).shape)
+#+END_SRC
+
+#+RESULTS:
+: /home/filip/llms/lib/python3.10/site-packages/huggingface_hub/file_download.py:949: FutureWarning: `resume_download` is deprecated and will be removed in version 1.0.0. Downloads always resume when possible. If you want to force a new download, use `force_download=True`.
+:   warnings.warn(
+: embed_query ready: (384,)
+
+# --- the probe itself ---
+
+#+BEGIN_SRC jupyter-python :session llms :kernel llms_kernel :async yes :exports both
+  import torch.nn.functional as F
+
+  # q(x): passage 0 re-embedded AS a query
+  q = embed_query(texts[0])
+  # d(z): it's own stored passage vector
+  d = V[0]
+
+  print(f"self cosine similarity (q, d) = {q @ d}")
+  #print(f"{F.cosine_similarity(torch.tensor(q), torch.tensor(d), 0)}")
+
+  sims = V @ q                                            # the toy's  scores = D @ q, now over all 490
+  rank = int((sims > sims[0]).sum()) + 1                  # self is row 0 — how many chunks beat it?
+  print("self rank    =", rank, "/", len(V))
+#+END_SRC
+
+#+RESULTS:
+: self cosine similarity (q, d) = 0.9727300405502319
+: self rank    = 1 / 490
