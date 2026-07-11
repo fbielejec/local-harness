@@ -21,8 +21,11 @@ impl Config {
             gen_base_url: s("GEN_BASE_URL", "http://localhost:8080/v1"),
             bind_addr: s("RAG_BIND_ADDR", "127.0.0.1:8081"),
             manifest_path: s("MANIFEST_PATH", "data/manifest.jsonl"),
+            // An unparseable TOP_K (non-integer) silently falls back to 5.
             top_k: s("TOP_K", "5").parse().unwrap_or(5),
             model_id: s("RAG_MODEL_ID", "ep-committees-grounded"),
+            // Only the exact string "1" enables think-stripping; anything else (incl. unset,
+            // "true", "0") leaves it off.
             strip_think: get("STRIP_THINK").as_deref() == Some("1"),
         }
     }

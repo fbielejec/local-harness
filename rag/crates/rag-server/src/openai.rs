@@ -11,6 +11,8 @@ pub struct Message {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ChatRequest {
+    // OWUI sends its selected model id here; we advertise our own id and ignore it.
+    #[allow(dead_code)]
     #[serde(default)]
     pub model: String,
     pub messages: Vec<Message>,

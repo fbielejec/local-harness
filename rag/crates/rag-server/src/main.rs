@@ -4,7 +4,6 @@ mod handlers;
 
 use anyhow::{Context, Result};
 use axum::{routing::{get, post}, Router, Json};
-use ep_rag_core::EmbeddingContract;
 use ep_rag_generate::{client::GenClient, provenance::Manifest};
 use ep_rag_retrieve::Retriever;
 use std::sync::Arc;
@@ -24,10 +23,13 @@ async fn main() -> Result<()> {
 
     let retriever = Retriever::new(&cfg.qdrant_url).context("init retriever")?;
 
-    // CONTRACT ASSERT (the one hard constraint): live embedder contract == index's stored.
+    // CONTRACT ASSERT (the one hard constraint): the LIVE embedder recipe == the index's
+    // stored recipe. Assert against `retriever.contract()` (the live contract), not
+    // `default()`, so the check means "live == stored" rather than "default == stored".
     let stored = retriever.any_stored_payload().await.context("read stored contract")?;
     let stored_map: std::collections::BTreeMap<_, _> = stored.into_iter().collect();
-    EmbeddingContract::default()
+    retriever
+        .contract()
         .assert_matches(&stored_map)
         .map_err(|e| anyhow::anyhow!(e))
         .context("startup contract check")?;
