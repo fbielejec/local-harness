@@ -1,7 +1,30 @@
 //! Retrieve brick: embed the query under the contract PREFIX, then Qdrant top-k.
 //! The productization of `rag_query.org`'s `embed_query` + `search` blocks.
 
+use qdrant_client::qdrant::{value::Kind, Value as QValue};
 use serde::Serialize;
+use std::collections::HashMap;
+
+/// Convert a single Qdrant value to serde_json (the kinds our payload uses).
+fn qval_to_json(v: &QValue) -> serde_json::Value {
+    use serde_json::Value as J;
+    match &v.kind {
+        Some(Kind::StringValue(s)) => J::from(s.clone()),
+        Some(Kind::IntegerValue(i)) => J::from(*i),
+        Some(Kind::DoubleValue(d)) => J::from(*d),
+        Some(Kind::BoolValue(b)) => J::from(*b),
+        Some(Kind::ListValue(l)) => J::Array(l.values.iter().map(qval_to_json).collect()),
+        Some(Kind::StructValue(s)) => {
+            J::Object(s.fields.iter().map(|(k, v)| (k.clone(), qval_to_json(v))).collect())
+        }
+        _ => J::Null,
+    }
+}
+
+/// Convert a Qdrant payload map to a serde_json object map.
+pub fn payload_to_json(p: &HashMap<String, QValue>) -> serde_json::Map<String, serde_json::Value> {
+    p.iter().map(|(k, v)| (k.clone(), qval_to_json(v))).collect()
+}
 
 /// One retrieved chunk: what the generator cites and grounds on.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -68,5 +91,19 @@ mod tests {
         let mut p = payload();
         p.remove("text");
         assert!(hit_from_payload(0.5, &p).is_none());
+    }
+
+    #[test]
+    fn qval_conversion_covers_string_int_bool() {
+        use qdrant_client::qdrant::{value::Kind, Value};
+        let mk = |kind| Value { kind: Some(kind) };
+        let mut m = std::collections::HashMap::new();
+        m.insert("citation_id".to_string(), mk(Kind::StringValue("X:1".into())));
+        m.insert("chunk_index".to_string(), mk(Kind::IntegerValue(1)));
+        m.insert("contract_normalized".to_string(), mk(Kind::BoolValue(true)));
+        let j = payload_to_json(&m);
+        assert_eq!(j["citation_id"], serde_json::json!("X:1"));
+        assert_eq!(j["chunk_index"], serde_json::json!(1));
+        assert_eq!(j["contract_normalized"], serde_json::json!(true));
     }
 }
