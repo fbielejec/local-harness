@@ -20,7 +20,8 @@ separated" becomes a menu of statistics + one probe:
   import json, urllib.request
   import numpy as np
 
-  QDRANT, COLLECTION = "http://localhost:6333", "ep_committee_docs"
+  # 6333 locally / 16333 tunneled port
+  QDRANT, COLLECTION = "http://localhost:16333", "ep_committee_docs"
 
   def _post(path, body):
       req = urllib.request.Request(QDRANT + path, data=json.dumps(body).encode(),

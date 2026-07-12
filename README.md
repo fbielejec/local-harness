@@ -298,6 +298,16 @@ make serve           # rag-server: OpenAI-compatible RAG endpoint on loopback :8
 make qdrant-status   # collection point count · make help for all targets
 ```
 
+**Reach the remote (weebeastie) Qdrant from the laptop (SSH tunnel).** On weebeastie Qdrant binds
+**loopback-only** (only Open WebUI's `:3000` faces the LAN), so tunnel to inspect the production
+index / dashboard. The laptop's own Qdrant already owns `6333/6334`, so map to spare local ports:
+```bash
+ssh -fN -L 16333:127.0.0.1:6333 -L 16334:127.0.0.1:6334 filip@192.168.1.22
+curl -s http://localhost:16333/collections/ep_committee_docs | grep -o '"points_count":[0-9]*'  # → 490
+# REST + dashboard: http://localhost:16333/dashboard   ·   gRPC (qdrant-client): localhost:16334
+```
+Stop later: `pkill -f "ssh -fN -L 16333"`.
+
 **State (2026-07-11):**
 - **Index built** — collection `ep_committee_docs`, **490 points**; each carries full provenance +
   `text` + the six `contract_*` fields (the embedding contract stamped per point, so a mismatched

@@ -203,6 +203,15 @@ Running list of follow-ups (check off as done; newest at the bottom).
     ("EP Committees, grounded"), keeping `BYPASS_EMBEDDING_AND_RETRIEVAL=true`. Plus the eval harness
     (recall@k/MRR **vs** groundedness+citation-accuracy). Steps: `docs/plans/2026-07-11-rag-server-implementation-plan.md`
     §Phase 4 + `docs/plans/2026-07-11-openwebui-rag-integration-design.md`.
+  - **[ ] Later — conditional/agentic retrieval (avoid always-on RAG):** Option A is
+    RAG-*as-a-model* — `rag-server`'s `chat_completions` (`handlers.rs:21`) runs the retrieve loop
+    **unconditionally** on every query to the grounded model, with no relevance gate (by design: the
+    index is anisotropic, so we "don't threshold raw cosine"). Off-topic questions still pull 5 EP
+    chunks and pay embed+search+~2k-token prefill, then the grounding prompt makes the model reply
+    "I don't know". Mitigated today only by the model picker (bare "Qwen" for general chat vs "EP
+    Committees, grounded" for policy Qs). If we want ONE model that decides whether to retrieve, that's
+    a real change — a router/agentic-RAG (tool-calling: expose retrieval as a tool the model calls only
+    when needed, the design's "tool-calling later" evolution). Out of scope for the current plan.
   - **Run:** `cd rag && make pipeline` (qdrant-up → fetch → ingest → index) · `make parity` ·
     `make serve` (rag-server, OpenAI-compatible RAG on `:8081`) · drills/notebook in Emacs
     (`llms_kernel`) or `uv run --project drills python drills/…`.
