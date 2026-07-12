@@ -1,0 +1,23 @@
+{
+  "version": "1.0",
+  "last_updated": "2026-07-12",
+  "description": "Top-level task classifier. Walk this tree before answering.",
+  "root": "Q_EP_COMMITTEE",
+  "nodes": {
+    "Q_EP_COMMITTEE": {
+      "type": "question",
+      "question": "Is the user asking a substantive question about the work, positions, or content of European Parliament committee documents (EMPL employment/social affairs, REGI regional development, IMCO internal market/consumer protection) — e.g. draft reports, amendments, rapporteur positions, deadlines, or policy specifics?",
+      "help": "YES: 'What is the Youth Guarantee deadline?', 'IMCO position on EV charging', 'REGI cohesion funding priorities', 'what does the EMPL draft report say about traineeships'. NO: general chit-chat, coding, math, translation, generic EU facts not tied to committee documents.",
+      "yes": "R_USE_EP_RAG",
+      "no": "R_UNCLASSIFIED"
+    },
+    "R_USE_EP_RAG": {
+      "type": "result", "task_type": "EP_COMMITTEE_RESEARCH", "tool": "search_ep_committee_docs",
+      "description": "Ground the answer in committee documents."
+    },
+    "R_UNCLASSIFIED": {
+      "type": "result", "task_type": "UNCLASSIFIED", "tool": null,
+      "description": "Answer from general knowledge; mark facts unverified; recommend authoritative sources."
+    }
+  }
+}

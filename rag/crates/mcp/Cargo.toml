@@ -1,0 +1,21 @@
+[package]
+name = "ep-rag-mcp"
+version.workspace = true
+edition.workspace = true
+
+[[bin]]
+name = "ep-rag-mcp"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+ep-rag-core = { path = "../core" }
+ep-rag-retrieve = { path = "../retrieve" }
+ep-rag-generate = { path = "../generate" }
+axum = "0.8"
+rmcp = { version = "2.2", features = ["server", "macros", "transport-streamable-http-server", "schemars"] }
+schemars = "1"
+tower = "0.5"

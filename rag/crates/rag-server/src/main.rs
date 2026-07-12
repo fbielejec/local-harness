@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 pub struct AppState {
     pub retriever: Retriever,
-    pub gen: GenClient,
+    pub generator: GenClient,
     pub manifest: Manifest,
     pub upstream_model: String,
     pub cfg: config::Config,
@@ -35,16 +35,16 @@ async fn main() -> Result<()> {
         .context("startup contract check")?;
     eprintln!("contract OK — live embedder matches the index");
 
-    let gen = GenClient::new(&cfg.gen_base_url);
-    let upstream_model = gen.model_id().await.context("resolve llama-server model")?;
+    let generator = GenClient::new(&cfg.gen_base_url);
+    let upstream_model = generator.model_id().await.context("resolve llama-server model")?;
     eprintln!("generator model: {upstream_model}");
-    if let Err(e) = gen.warm(&upstream_model).await {
+    if let Err(e) = generator.warm(&upstream_model).await {
         eprintln!("warm ping failed (non-fatal): {e}");
     }
 
     let manifest = Manifest::load(&cfg.manifest_path).context("load manifest")?;
 
-    let state = Arc::new(AppState { retriever, gen, manifest, upstream_model, cfg: cfg.clone() });
+    let state = Arc::new(AppState { retriever, generator, manifest, upstream_model, cfg: cfg.clone() });
 
     let app = Router::new()
         .route("/v1/models", get(models))

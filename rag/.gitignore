@@ -10,4 +10,7 @@ __pycache__/
 .env
 
 # Ingested corpus — fetched PDFs are reproducible, not source; keep them out of git
-data/
+# (glob the contents rather than the dir so a versioned config below can be re-included)
+data/*
+# ...except versioned config that IS source (loaded at startup), e.g. the route tree.
+!data/route_tree.json

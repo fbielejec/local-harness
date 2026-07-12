@@ -35,7 +35,7 @@ pub async fn chat_completions(
         return stream_answer(state, system, user, cited).await;
     }
 
-    let mut answer = match state.gen.complete(&state.upstream_model, &system, &user).await {
+    let mut answer = match state.generator.complete(&state.upstream_model, &system, &user).await {
         Ok(a) => a,
         Err(e) => return error_response(&format!("generate failed: {e}")),
     };
@@ -85,7 +85,7 @@ async fn stream_answer(
 ) -> Response {
     let model = state.cfg.model_id.clone();
 
-    let upstream = match state.gen.complete_stream(&state.upstream_model, &system, &user).await {
+    let upstream = match state.generator.complete_stream(&state.upstream_model, &system, &user).await {
         Ok(s) => s,
         Err(e) => return error_response(&format!("generate stream failed: {e}")),
     };
