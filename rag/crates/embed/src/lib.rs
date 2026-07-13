@@ -3,7 +3,7 @@
 //! We pivoted here from `fastembed` because its ONNX Runtime prebuilt requires
 //! glibc >= 2.38, but this box is glibc 2.35 (Ubuntu 22.04). candle is pure Rust,
 //! links cleanly, and is a *more* maximal-Rust choice. The tradeoff — we own the
-//! two contract-critical details ourselves — is exactly what the parity gate
+//! two contract-critical details ourselves -- is exactly what the parity gate
 //! validates:
 //!   * CLS pooling: take the [CLS] token (index 0) of the last hidden state.
 //!     bge-small uses CLS pooling, NOT mean.
@@ -47,7 +47,12 @@ impl Embedder {
         let vb = unsafe { VarBuilder::from_mmaped_safetensors(&[weights], DType::F32, &device)? };
         let model = BertModel::load(vb, &config)?;
 
-        Ok(Self { model, tokenizer, device, contract })
+        Ok(Self {
+            model,
+            tokenizer,
+            device,
+            contract,
+        })
     }
 
     pub fn contract(&self) -> &EmbeddingContract {
@@ -63,7 +68,10 @@ impl Embedder {
         let n = encodings.len();
         let seq = encodings[0].get_ids().len();
 
-        let ids: Vec<u32> = encodings.iter().flat_map(|e| e.get_ids().to_vec()).collect();
+        let ids: Vec<u32> = encodings
+            .iter()
+            .flat_map(|e| e.get_ids().to_vec())
+            .collect();
         let mask: Vec<u32> = encodings
             .iter()
             .flat_map(|e| e.get_attention_mask().to_vec())
@@ -85,12 +93,12 @@ impl Embedder {
         Ok(normalized.to_vec2::<f32>()?)
     }
 
-    /// Embed passages — NO instruction prefix.
+    /// Embed passages -- NO instruction prefix.
     pub fn embed_passages(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>> {
         self.embed(texts)
     }
 
-    /// Embed queries — WITH the contract's instruction prefix prepended.
+    /// Embed queries -- WITH the contract's instruction prefix prepended.
     pub fn embed_queries(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>> {
         let prefixed = texts
             .into_iter()

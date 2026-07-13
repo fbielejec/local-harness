@@ -30,7 +30,7 @@ Call /route and smoke test the task classifier.
   with open("/home/filip/CloudStation/LLMs/local_coding_harness/rag/data/route_tree.json", "r") as file:
     tree = json.load(file)
 
-  SYS_A = (
+  SYSTEM = (
     "You are a task router. Below is a decision tree as JSON. Walk it starting at `root`. "
     "For the user's message, answer the `question` node(s) and follow yes/no until you reach a `result` node.\n\n"
     "DECISION TREE:\n" + json.dumps(tree, indent=2) + "\n\n"
@@ -45,7 +45,7 @@ Call /route and smoke test the task classifier.
   query = "Give me a good recipe for spaghetti carbonara."
 
   body = {"model": MODEL, "temperature": 0.0, "max_tokens": 200,
-          "messages": [{"role":"system","content":SYS_A},{"role":"user","content":query}]}
+          "messages": [{"role":"system","content":SYSTEM},{"role":"user","content":query}]}
 
   raw = post("/chat/completions", body)["choices"][0]["message"]["content"]
 
