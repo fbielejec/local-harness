@@ -63,19 +63,24 @@ serve-mcp: ## run ep-rag-mcp (retrieval + /route + MCP tool) on loopback :8082
 	$(CARGO_RUN) -p ep-rag-mcp
 
 # --- live smoke checks (are the running services answering?) -----------------
+# Robust to the single --parallel 1 slot being busy: a timeout/empty body prints a
+# clean diagnostic and exits 1 instead of a Python traceback (python stderr muted).
 llama-status: ## smoke llama-server (:8080): model id + a real generation (expect OK)
 	@echo "→ llama-server /v1/models:"
-	@curl -s --max-time 10 http://localhost:8080/v1/models \
-	  | python3 -c 'import sys,json;print("   model:",json.load(sys.stdin)["data"][0]["id"])'
+	@curl -fs --max-time 15 http://localhost:8080/v1/models \
+	  | python3 -c 'import sys,json;print("   model:",json.load(sys.stdin)["data"][0]["id"])' 2>/dev/null \
+	  || { echo "   ERROR: no /v1/models response on :8080 (server down or tunnel closed)"; exit 1; }
 	@echo "→ llama-server /v1/chat/completions:"
-	@curl -s --max-time 60 http://localhost:8080/v1/chat/completions -H 'Content-Type: application/json' \
+	@curl -fs --max-time 180 http://localhost:8080/v1/chat/completions -H 'Content-Type: application/json' \
 	  -d '{"model":"local","messages":[{"role":"user","content":"Reply with exactly: OK"}],"max_tokens":8,"temperature":0}' \
-	  | python3 -c 'import sys,json;print("   reply:",repr(json.load(sys.stdin)["choices"][0]["message"]["content"].strip()))'
+	  | python3 -c 'import sys,json;print("   reply:",repr(json.load(sys.stdin)["choices"][0]["message"]["content"].strip()))' 2>/dev/null \
+	  || { echo "   ERROR: no generation within 180s (single --parallel 1 slot busy, or cold prefill)"; exit 1; }
 
 mcp-status: ## smoke ep-rag-mcp (:8082): classify + ground a canned query via /route
-	@curl -s --max-time 90 http://localhost:8082/route -H 'Content-Type: application/json' \
+	@curl -fs --max-time 180 http://localhost:8082/route -H 'Content-Type: application/json' \
 	  -d '{"message":"What is the deadline under the Youth Guarantee for a young person to receive an offer?"}' \
-	  | python3 -c 'import sys,json;d=json.load(sys.stdin);print("   route=%s  should_ground=%s  ctx_chars=%d"%(d["route"],d["should_ground"],len(d.get("context") or "")))'
+	  | python3 -c 'import sys,json;d=json.load(sys.stdin);print("   route=%s  should_ground=%s  ctx_chars=%d"%(d["route"],d["should_ground"],len(d.get("context") or "")))' 2>/dev/null \
+	  || { echo "   ERROR: no /route response within 180s (ep-rag-mcp, llama-server, or Qdrant down/busy)"; exit 1; }
 
 test: ## cargo test across the workspace
 	cargo test

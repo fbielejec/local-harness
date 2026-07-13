@@ -39,3 +39,6 @@ qwen:
 	OPENAI_API_KEY="dummy" \
 	OPENAI_MODEL="$(MODEL)" \
 	qwen $(if $(P),-p "$(P)",)
+
+remote-qdrant-status: ## list remote Qdrant collections (is anything indexed yet?)
+	curl -s http://localhost:16333/collections | python3 -m json.tool
