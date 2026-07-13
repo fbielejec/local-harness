@@ -1,0 +1,58 @@
+* Classify request
+
+Call /route and smoke test the task classifier.
+
+* Setup
+
+#+BEGIN_SRC jupyter-python :session llms :kernel llms_kernel :async yes :exports both
+  import json, urllib.request, time
+
+  # llama server
+  BASE = "http://localhost:8080/v1"
+
+  def post(path, body, timeout=600):
+      req = urllib.request.Request(BASE + path,
+          data=json.dumps(body).encode(),
+          headers={"Content-Type": "application/json", "Authorization": "Bearer dummy"})
+      with urllib.request.urlopen(req, timeout=timeout) as r:
+          return json.load(r)
+
+  def get(path, timeout=30):
+      with urllib.request.urlopen(BASE + path, timeout=timeout) as r:
+          return json.load(r)
+#+END_SRC
+
+#+RESULTS:
+
+* Classifier: walk tree, emit JSON decision
+
+#+BEGIN_SRC jupyter-python :session llms :kernel llms_kernel :async yes :exports both
+  with open("/home/filip/CloudStation/LLMs/local_coding_harness/rag/data/route_tree.json", "r") as file:
+    tree = json.load(file)
+
+  SYS_A = (
+    "You are a task router. Below is a decision tree as JSON. Walk it starting at `root`. "
+    "For the user's message, answer the `question` node(s) and follow yes/no until you reach a `result` node.\n\n"
+    "DECISION TREE:\n" + json.dumps(tree, indent=2) + "\n\n"
+    "Respond with ONLY a compact JSON object, no prose, no markdown fence:\n"
+    '{\"reached\": \"<result node id>\", \"tool\": \"<tool name or null>\", \"reason\": \"<one short clause>\"}'
+  )
+
+  MODEL = get("/models")["data"][0]["id"]
+  print("MODEL:", MODEL, "\n")
+
+  #query = "What is the deadline under the Youth Guarantee for a young person to receive an offer?"
+  query = "Give me a good recipe for spaghetti carbonara."
+
+  body = {"model": MODEL, "temperature": 0.0, "max_tokens": 200,
+          "messages": [{"role":"system","content":SYS_A},{"role":"user","content":query}]}
+
+  raw = post("/chat/completions", body)["choices"][0]["message"]["content"]
+
+  print(f"{raw}")
+#+END_SRC
+
+#+RESULTS:
+: MODEL: /home/filip/models/models--unsloth--Qwen3-Coder-30B-A3B-Instruct-GGUF/snapshots/b17cb02dd882d5b6ab62fc777ad2995f19668350/Qwen3-Coder-30B-A3B-Instruct-IQ4_XS.gguf
+:
+: {"reached": "R_UNCLASSIFIED", "tool": null, "reason": "User asked for a recipe, which is unrelated to European Parliament committee documents."}

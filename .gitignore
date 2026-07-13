@@ -9,3 +9,6 @@ __pycache__/
 
 # secrets — Open WebUI compose env (WEBUI_SECRET_KEY, EXA_API_KEY)
 deploy/openwebui/.env
+
+# orgmode
+*.org_archive
