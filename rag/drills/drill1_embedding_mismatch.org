@@ -1,0 +1,86 @@
+#+TITLE: Drill 1 — Embedding Mismatch (the query recipe)
+
+* Drill 1 — embedding mismatch
+
+Break the *query recipe* and watch recall collapse, while the contract-stamp catches it
+and the self-retrieval probe (Drill 0) conspicuously does NOT. Toy analog: two encoders
+sharing weights, selected by a control token — align =query-mode(question)= with
+=passage-mode(answer)=, then run the question through the wrong mode.
+
+The recipe has two contract-critical knobs (=crates/embed/src/lib.rs=): the query-only
+instruction PREFIX and CLS-not-mean pooling. This drill breaks the PREFIX; the pooling
+break is the encoder-drift variant (which self-retrieval *does* see — that's the contrast).
+
+** The intuition (why q and d "diverge" without the prefix)
+
+A tempting objection: prefixing makes the query text *longer/different*
+("Represent this sentence for searching relevant passages: " + question), so surely
+=cos(prefixed_q, d) < 1= and maybe even *lower* than =cos(bare_q, d)=. True — and
+irrelevant. Three unwindings:
+
+1. *Retrieval ranks, it does not threshold.* =cos= between a short question and a long
+   passage is always well below 1 (this index: relevant hits sit 0.68–0.73, see Drill 0 /
+   anisotropy). Qdrant takes top-k by ORDER. "Diverge" = the gold passage loses its rank
+   advantage over the ~485 distractors, NOT "cosine → 0". Recall@k is about order, not
+   magnitude.
+
+2. *A dense embedding is not surface-token overlap.* "8 extra prefix tokens ⇒ further"
+   is token-counting; =embed()= is a learned nonlinear projection. Crucially the prefix
+   is IDENTICAL for every query (=core=: one constant string) ⇒ it carries zero
+   discriminative content ⇒ the model was trained to read it as an INSTRUCTION / mode
+   flag, not as meaning. It's a control token that flips the shared BERT weights into
+   "query-encoding mode".
+
+3. *bge's training was asymmetric.* Contrastive fine-tuning showed queries ALWAYS
+   prefixed, passages NEVER. The loss pulled =f(prefix+query)= toward =f(gold passage)=.
+   So the geometry only exists for prefixed queries. Two modes, one weight matrix:
+   - query-mode (prefix): "map next to the passages that would ANSWER this"
+   - passage-mode (no prefix): "map next to passages that SAY the same thing"
+   The objective aligned query-mode(question) ↔ passage-mode(answer); it never aligned
+   passage-mode(question) with anything.
+
+   Drop the prefix ⇒ the question goes through passage-mode ⇒ it embeds like a *document*,
+   most similar to other *questions* / text phrased like it — NOT its structurally
+   dissimilar answer. Concretely: gold ≈ "Member States shall ensure a quality offer
+   within four months" has near-zero lexical overlap with "What is the deadline … to
+   receive an offer?" and the opposite grammatical form (declarative vs interrogative).
+   Bridging that question→answer gap (asymmetric retrieval: short interrogative query →
+   long declarative passage) is *exactly* what the prefix switches on. Without it the gold
+   sinks and surface-similar-but-irrelevant chunks float up. That is the collapse.
+
+** Why Drill 0's self-retrieval probe cannot catch this
+
+Self-retrieval sets query text = passage text. Then even in passage-mode,
+=f(passage_text)= vs =f(passage_text)= are near-identical — no question→answer gap to
+bridge — so dropping the prefix barely moves it and the probe looks HEALTHY. The prefix
+bug manifests ONLY when query ≠ passage text, i.e. recall@k on a real golden set. So:
+
+| break            | recall@k on real queries | self-retrieval probe |
+|------------------+--------------------------+----------------------|
+| dropped prefix   | collapses                | still passes (blind) |
+| wrong pooling    | collapses                | flags it (enc. drift)|
+
+Self-retrieval detects *encoder* drift (pooling/model), NOT the dropped prefix. That's the
+diagnostic value of running BOTH.
+
+** The probe (executable spec — TODO, not yet run)
+
+Needs a golden set: a handful of (question, gold citation_id[]) pairs over the live index
+(EMPL Youth-Guarantee four-months is the canonical one). Then:
+
+1. embed each question the RIGHT way (=embed_queries=, prefix + CLS) → recall@k, MRR.
+2. embed each question the WRONG ways, one knob at a time:
+   - drop the prefix (=embed_passages= on the question) — the Drill-1 break
+   - mean-pool instead of CLS — the encoder-drift variant
+3. tabulate recall@k / MRR for each; the prefix break should tank recall@k while
+   self-retrieval (Drill 0) stays green; the pooling break tanks BOTH.
+4. show the CONTRACT STAMP catches the swap at the seam: a mismatched recipe fails the
+   startup live-vs-stored assert (=crates/mcp/src/main.rs= contract check) before it can
+   serve — the mechanical guard behind the conceptual story above.
+
+#+BEGIN_SRC jupyter-python :session llms :kernel llms_kernel :async yes :exports both
+  # TODO: golden set + recall@k harness. Mirror Drill 0's fetch/_post plumbing and the
+  # retrieve crate's query path (embed_queries vs embed_passages). Keep query≠passage so
+  # the prefix break is visible (see table above).
+  pass
+#+END_SRC

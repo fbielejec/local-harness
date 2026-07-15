@@ -55,4 +55,4 @@ Call /route and smoke test the task classifier.
 #+RESULTS:
 : MODEL: /home/filip/models/models--unsloth--Qwen3-Coder-30B-A3B-Instruct-GGUF/snapshots/b17cb02dd882d5b6ab62fc777ad2995f19668350/Qwen3-Coder-30B-A3B-Instruct-IQ4_XS.gguf
 :
-: {"reached": "R_UNCLASSIFIED", "tool": null, "reason": "User asked for a recipe, which is unrelated to European Parliament committee documents."}
+: {"reached": "R_UNCLASSIFIED", "tool": null, "reason": "User asked for a recipe, which is not related to European Parliament committee documents."}

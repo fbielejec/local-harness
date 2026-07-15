@@ -19,6 +19,9 @@ CARGO_RUN := cargo run --release
 help: ## list targets
 	@grep -hE '^[a-zA-Z0-9_-]+:.*##' $(MAKEFILE_LIST) | sort | awk 'BEGIN{FS=":.*## "}{printf "  \033[36m%-13s\033[0m %s\n", $$1, $$2}'
 
+test: ## cargo test across the workspace
+	cargo test
+
 # --- infra ------------------------------------------------------------------
 qdrant-up: ## start Qdrant (Docker, detached)
 	$(COMPOSE) up -d
@@ -81,6 +84,3 @@ mcp-status: ## smoke ep-rag-mcp (:8082): classify + ground a canned query via /r
 	  -d '{"message":"What is the deadline under the Youth Guarantee for a young person to receive an offer?"}' \
 	  | python3 -c 'import sys,json;d=json.load(sys.stdin);print("   route=%s  should_ground=%s  ctx_chars=%d"%(d["route"],d["should_ground"],len(d.get("context") or "")))' 2>/dev/null \
 	  || { echo "   ERROR: no /route response within 180s (ep-rag-mcp, llama-server, or Qdrant down/busy)"; exit 1; }
-
-test: ## cargo test across the workspace
-	cargo test

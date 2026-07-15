@@ -21,7 +21,7 @@ Runnable in Emacs: =C-c C-c= each block; the shared =:session= keeps state alive
   import torch, torch.nn.functional as F
   from transformers import AutoTokenizer, AutoModel
 
-  QDRANT     = "http://localhost:6333"
+  QDRANT     = "http://localhost:16333"
   COLLECTION = "ep_committee_docs"
   QWEN       = "http://localhost:8080/v1"     # remote Qwen llama-server, over the ssh tunnel
 
