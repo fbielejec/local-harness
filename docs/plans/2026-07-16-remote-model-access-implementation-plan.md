@@ -3,7 +3,7 @@
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan
 > task-by-task.
 
-## Status — 2026-07-16: executed, Tasks 1–9 done and verified
+## Status — 2026-07-16: executed, Tasks 1–11 + 13 done and verified
 
 | Task | State | Note |
 |------|-------|------|
@@ -17,7 +17,7 @@
 | 8 Outside test (NordVPN) | ✅ | **Handshake + model response.** Carrier NAT falsified. No MTU workaround needed (nesting was fine at 1420). |
 | 9 Ergonomics | ✅ | Grew beyond plan: `~/.ssh/config` (both aliases) **+ root `Makefile` targets** — `make away` / `tunnels` / `wg-status` / `away-stop`. |
 | 10 reresolve timer | ❌ **DROPPED** | YAGNI — see the task below for the reasoning. |
-| 11 sshd hardening | ⬜ | Pending. |
+| 11 sshd hardening | ✅ | `PasswordAuthentication no` · `PermitRootLogin no` · `KbdInteractiveAuthentication no`. Verified behaviourally, not by reading the file back: a password-auth probe returns `Permission denied (publickey)` — that list is the only method the server accepts. |
 | 12 Hotspot (Stage 2) | ⬜ | Pending — the only remaining test of *reality* vs a clean datacenter exit. Step 6 (`enable wg-quick@wg0`) is **cancelled**; see the task. |
 | 13 Docs | ✅ | README §3 + §Remote access; CLAUDE.md; this table. |
 

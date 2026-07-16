@@ -181,11 +181,16 @@ Running list of follow-ups (check off as done; newest at the bottom).
     on purpose**, TTL 60) · `~/.ssh/config` with `weebeastie` (LAN) + `weebeastie-remote`
     (tunnel) aliases · root `Makefile` targets. **Verified from outside** via a NordVPN exit:
     handshake + `/v1/models` over both the raw IP and the DDNS hostname.
-  - **[ ] Left:** sshd hardening (`PasswordAuthentication no`, `PermitRootLogin no` — keep a
-    second session open as an escape hatch) · Stage-2 verification from a **phone hotspot**
-    (carrier CGNAT = a harder, more realistic test than a clean Nord datacenter exit) · prove
-    DDNS **recovery** by forcing a new lease (today only proves the updater *runs*, not that it
-    *heals*).
+  - **[x] sshd hardened (2026-07-16):** `PasswordAuthentication no` · `PermitRootLogin no` ·
+    `KbdInteractiveAuthentication no` (`/etc/ssh/sshd_config.d/99-hardening.conf`). The user key
+    is **RSA-4096** (`~/.ssh/id_rsa`, sigs via `rsa-sha2-512`) — *not* ed25519; that's the
+    **host** key. To verify hardening, probe behaviour rather than reading the file:
+    `ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no filip@192.168.1.22`
+    → `Permission denied (publickey)`; that parenthesised list is the only method accepted.
+  - **[ ] Left:** Stage-2 verification from a **phone hotspot** (carrier CGNAT = a harder, more
+    realistic test than a clean Nord datacenter exit) · prove DDNS **recovery** by forcing a new
+    lease (today only proves the updater *runs*, not that it *heals*) · **GitHub support request**
+    to GC the pre-redaction commits, still fetchable by SHA.
   - **Don't relearn:** public IPv4 `<HOME_IPV4>` is **not CGNAT** ⇒ port forwarding works.
     But RIPE marks it `Proximus … xDSL customers (dynamic)` — the IP is **sticky, not static**
     ⇒ DDNS (deSEC.io) is required, else you get **locked out** when the line resyncs while

@@ -413,10 +413,14 @@ the raw IP and the DDNS hostname. That test also settled the one fact unfalsifia
 the LAN — the public IPv4 is **not** behind carrier NAT. Testing the forward *from* the LAN is a
 false negative (hairpinning); use NordVPN or a phone hotspot.
 
-**Pending:** sshd hardening (`PasswordAuthentication no`, `PermitRootLogin no`) · Stage-2
-verification from a phone hotspot (carrier CGNAT — a harder, more realistic test than a clean
-Nord datacenter exit) · proving DDNS *recovery* by forcing a new lease (today only proves the
-updater runs, not that it heals).
+**sshd is hardened** (2026-07-16): key-only, no root login. Verify by *behaviour*, not by
+reading the config — `ssh -o PreferredAuthentications=password -o PubkeyAuthentication=no
+filip@192.168.1.22` must answer `Permission denied (publickey)`; that list is the only method
+the server accepts.
+
+**Pending:** Stage-2 verification from a phone hotspot (carrier CGNAT — a harder, more realistic
+test than a clean Nord datacenter exit) · proving DDNS *recovery* by forcing a new lease (today
+only proves the updater runs, not that it heals).
 
 ⚠️ **Secrets:** `/etc/wireguard/*` and `/etc/desec-updater.env` are root-only and live outside
 the repo. This repo is **public** — never commit the home IP, the DDNS hostname, or private
