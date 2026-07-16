@@ -162,12 +162,30 @@ preserved (reasoning 1.50/5 ≥ 1.00 baseline; agent-pack **5/5** = baseline). F
 Running list of follow-ups (check off as done; newest at the bottom).
 
 - [~] **Remote access to the local harness model** — reach `:8080/v1` from a travel laptop.
-  Design (validated, not implemented): `docs/plans/2026-07-16-remote-model-access-design.md`;
-  step-by-step: `docs/plans/2026-07-16-remote-model-access-implementation-plan.md`.
+  **WORKING as of 2026-07-16** (verified from outside); two items pending, see *Left* below.
+  Design: `docs/plans/2026-07-16-remote-model-access-design.md`; step-by-step:
+  `docs/plans/2026-07-16-remote-model-access-implementation-plan.md`. Runbook: `README.md`
+  §3 + §Remote access.
+  - **Use it:** `make away` (off-LAN: wg up + all tunnels over it) · `make tunnels` (at home) ·
+    `make wg-status` · `make away-stop`. `make away` **only works from OUTSIDE the house** —
+    the endpoint is the home public IP and the b-box **doesn't hairpin**, so it fails fast (3 s)
+    telling you to use `make tunnels`.
   - **Decided:** self-hosted **WireGuard** on weebeastie (one router rule: `UDP 51820 →
-    192.168.1.22`) + **SSH over the tunnel**. `llama-server` binding is **UNCHANGED** —
-    stays `127.0.0.1:8080`, never bound to any interface; the tunnel command is byte-identical
-    to today's, only the host changes (`filip@10.10.0.1`).
+    192.168.1.22`; **`:22` deliberately NOT forwarded**) + **SSH over the tunnel**.
+    `llama-server` binding is **UNCHANGED** — stays `127.0.0.1:8080`, never bound to any
+    interface; the tunnel command is byte-identical to today's, only the host changes
+    (`filip@10.10.0.1`).
+  - **[x] Done (2026-07-16):** DHCP reservation · wireguard both ends (weebeastie
+    `wg-quick@wg0` **enabled at boot**, laptop **deliberately not** — see below) · b-box
+    UDP-51820 forward · deSEC DDNS + 5-min updater timer on weebeastie (A only, **AAAA deleted
+    on purpose**, TTL 60) · `~/.ssh/config` with `weebeastie` (LAN) + `weebeastie-remote`
+    (tunnel) aliases · root `Makefile` targets. **Verified from outside** via a NordVPN exit:
+    handshake + `/v1/models` over both the raw IP and the DDNS hostname.
+  - **[ ] Left:** sshd hardening (`PasswordAuthentication no`, `PermitRootLogin no` — keep a
+    second session open as an escape hatch) · Stage-2 verification from a **phone hotspot**
+    (carrier CGNAT = a harder, more realistic test than a clean Nord datacenter exit) · prove
+    DDNS **recovery** by forcing a new lease (today only proves the updater *runs*, not that it
+    *heals*).
   - **Don't relearn:** public IPv4 `<HOME_IPV4>` is **not CGNAT** ⇒ port forwarding works.
     But RIPE marks it `Proximus … xDSL customers (dynamic)` — the IP is **sticky, not static**
     ⇒ DDNS (deSEC.io) is required, else you get **locked out** when the line resyncs while
@@ -187,9 +205,21 @@ Running list of follow-ups (check off as done; newest at the bottom).
     `api.anthropic.com` (disables itself if `ANTHROPIC_BASE_URL` differs) and persists the full
     transcript server-side. Its one good idea is the **dial-out topology**, only worth it if the
     scope ever widens to driving an agent at home from a phone.
-  - **Next:** DHCP-reserve `192.168.1.22` → b-box port-forward → keygen + both `wg0.conf` →
-    handshake (`wg show`) is also the carrier-NAT falsification test → verify from a **real**
-    foreign network (LAN testing proves nothing).
+  - **Gotchas paid for the hard way (don't relearn):**
+    - **Never test the forward from the LAN** — the b-box has no NAT loopback, so an inside test
+      against the public IP is a **false negative**. Use NordVPN (as a *test client* on the
+      laptop — that's not a contradiction of rejecting it as *transport* on weebeastie) or a
+      hotspot. A handshake from outside is also the carrier-NAT falsification test.
+    - **Don't `systemctl enable wg-quick@wg0` on the laptop.** An auto-started tunnel is
+      permanently broken *at home*, which is where the laptop mostly is: live `wg0`, dead
+      `10.10.0.1`, `ssh` hanging for minutes on the one network where all is well. Hence the
+      explicit `make away` + its 3-s reachability check. (The **server-side** enable is correct.)
+    - **`pkill -f "ssh -fN …"` matches its own argv** and kills the shell running it. The root
+      `Makefile` already uses the `[s]sh` regex trick — copy it.
+    - Debian ships `reresolve-dns` under `/usr/share/doc/wireguard-tools/examples/`, not the
+      upstream `/usr/share/wireguard-tools/` path.
+    - **No `ip_forward`, no MASQUERADE.** Most WireGuard guides add them; they're for gateway
+      use. `AllowedIPs = 10.10.0.1/32` terminates at the interface — blast radius stays one host.
 - [~] **RAG(s)** — EP-committee RAG, maximal-Rust. Full design + status:
   `docs/plans/2026-07-10-ep-committee-rag-design.md`. Code: `rag/` (cargo workspace, `rag/Makefile`).
   - **Goal:** grounded, cited Q&A over EMPL/REGI/IMCO EP committee PDFs (for spouse's MEP

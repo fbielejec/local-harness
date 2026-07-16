@@ -156,18 +156,37 @@ sudo reboot                           # full host reboot — service auto-starts
                                       #   re-run the "Check if it's running" block once back up
 ```
 
-## 3. [client] SSH tunnel
+## 3. [client] Reach the server — on the LAN, or from anywhere
 
-Maps the laptop's `localhost:8080` to the server's loopback `8080`:
+`llama-server` is **loopback-only** on weebeastie, so every client path is an SSH forward
+mapping the laptop's `localhost:8080` to the server's `127.0.0.1:8080`. Two ways in, one
+command each. Everything downstream (§4's env vars, §5's eval gate) is identical either way —
+from the client's point of view `localhost:8080` is `localhost:8080`.
 
+**On the home LAN:**
 ```bash
-ssh -fN -L 8080:127.0.0.1:8080 filip@192.168.1.22
-curl -s http://localhost:8080/v1/models | head -c 200      # round-trip check
+make tunnels                                             # llama :8080 · Qdrant :16333/:16334 · mcp :8082
+curl -s http://localhost:8080/v1/models | head -c 200     # round-trip check
+make tunnels-stop
 ```
-Stop later: `pkill -f "ssh -fN -L 8080"`. Or `make tunnels` / `make tunnels-stop`.
+Just the model: `make tunnel-llama`. Raw equivalent:
+`ssh -fN -L 8080:127.0.0.1:8080 filip@192.168.1.22` (stop: `pkill -f "ssh -fN -L 8080"`).
 
-**Off the home LAN?** Same tunnel, wrapped in WireGuard — `make away`. See
-*Remote access (WireGuard)* below.
+**From an external network** (café, hotspot, anywhere):
+```bash
+make away                                                # wg up (+ reachability check) → same tunnels over WireGuard
+curl -s http://localhost:8080/v1/models | head -c 200     # identical check, identical result
+make wg-status                                           # endpoint / handshake / transfer
+make away-stop                                           # tunnels down + WireGuard down
+```
+`make away` re-points `REMOTE` at the WireGuard peer (`10.10.0.1`), so Qdrant and the MCP
+server come along for free. Tunnel died mid-session? `make away-stop && make away` — it
+re-resolves DNS on every up.
+
+⚠️ **`make away` works only from OUTSIDE the house.** The endpoint is the home *public* IP and
+the router doesn't hairpin, so at home the packets die at the router. Run it there and it fails
+in 3 s pointing you at `make tunnels` (rather than hanging `ssh` for minutes). Router rule,
+DDNS, and the rest: *Remote access (WireGuard)* below.
 
 ## 4. [client] Qwen-Code harness
 

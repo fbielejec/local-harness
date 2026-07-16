@@ -3,6 +3,31 @@
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan
 > task-by-task.
 
+## Status — 2026-07-16: executed, Tasks 1–9 done and verified
+
+| Task | State | Note |
+|------|-------|------|
+| 1 DHCP reservation | ✅ | Step 3's verification was **rewritten mid-flight** — the original `dhclient -r` would have deconfigured the interface over the SSH session carrying it, and targeted the wrong DHCP client (NetworkManager owns it). |
+| 2 Install WireGuard | ✅ | ufw **inactive** ⇒ Step 2 of Task 4 skipped. |
+| 3 Keys | ✅ | Private keys generated in place, never printed. |
+| 4 weebeastie `wg0` | ✅ | `wg-quick@wg0` **enabled at boot**. Invariant asserted: `127.0.0.1:8080`. |
+| 5 Laptop, LAN endpoint | ✅ | The decomposition worked — proved the config with the router out of the picture. SSH host-key match also confirmed the tunnel lands on the same box. |
+| 6 deSEC DDNS | ✅ | A only, **AAAA absent**, TTL 60. Empty `dig` was resolver negative-caching, not a fault. |
+| 7 Port forward | ✅ | UDP 51820 → `192.168.1.22`. `:22` **not** forwarded. |
+| 8 Outside test (NordVPN) | ✅ | **Handshake + model response.** Carrier NAT falsified. No MTU workaround needed (nesting was fine at 1420). |
+| 9 Ergonomics | ✅ | Grew beyond plan: `~/.ssh/config` (both aliases) **+ root `Makefile` targets** — `make away` / `tunnels` / `wg-status` / `away-stop`. |
+| 10 reresolve timer | ❌ **DROPPED** | YAGNI — see the task below for the reasoning. |
+| 11 sshd hardening | ⬜ | Pending. |
+| 12 Hotspot (Stage 2) | ⬜ | Pending — the only remaining test of *reality* vs a clean datacenter exit. Step 6 (`enable wg-quick@wg0`) is **cancelled**; see the task. |
+| 13 Docs | ✅ | README §3 + §Remote access; CLAUDE.md; this table. |
+
+**Also handled:** the design docs originally recorded the real home IP and reached **public**
+GitHub. Redacted to `<HOME_IPV4>` / `<HOME_V6_PREFIX>` / `<DDNS_HOST>`, history rewritten,
+force-pushed. ⚠️ The pre-rewrite commits **remain fetchable by SHA** until GitHub GCs them — a
+support request is still outstanding. CLAUDE.md now carries a never-commit rule.
+
+---
+
 **Goal:** reach `llama-server`'s OpenAI-compatible API on `weebeastie` from a travel laptop
 outside the home LAN, without changing the loopback-only binding.
 

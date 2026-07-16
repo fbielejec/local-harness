@@ -1,9 +1,33 @@
 # Remote Access to the Local Model — Design
 
 **Date:** 2026-07-16
-**Status:** validated, not yet implemented
+**Status:** **IMPLEMENTED and verified from outside** (2026-07-16). Two items outstanding:
+sshd hardening, and Stage-2 verification from a phone hotspot. Runbook: `README.md` §3 +
+§Remote access. Task-by-task record:
+`docs/plans/2026-07-16-remote-model-access-implementation-plan.md`.
 **Topic:** reach `llama-server`'s OpenAI-compatible API on `weebeastie` from a travel laptop
 outside the home LAN, without weakening the loopback-only posture.
+
+## Outcome (2026-07-16)
+
+Works. `make away` from an external network → WireGuard handshake → SSH forward →
+`llama-server` answering on `localhost:8080`, with the loopback-only invariant intact
+(asserted, not assumed: `ss -lntp` still shows `127.0.0.1:8080` and nothing else).
+
+**Settled by measurement, not argument:** the public IPv4 is **not** behind carrier NAT — the
+one fact unfalsifiable from inside the LAN. A handshake arriving from a NordVPN exit disproved
+it outright.
+
+**Three things the design got wrong, corrected by building it:**
+
+1. **`reresolve-dns` on a timer → dropped as YAGNI.** See the Endpoint-resolution section below.
+   Bouncing the tunnel re-resolves; the timer was slower than the manual fix and rescued nothing.
+2. **`systemctl enable wg-quick@wg0` on the laptop → dropped.** An auto-started tunnel is
+   permanently broken *at home*. Replaced by explicit `make away` with a fail-fast reachability
+   check. (The server-side enable was right and stayed.)
+3. **DDNS-before-outside-test → reordered.** The original order tested the port-forward and
+   deSEC simultaneously, so a failure would have implicated both — exactly the mistake the
+   LAN-endpoint-first step was designed to avoid. Corrected to: forward → verify → DDNS → verify.
 
 ## Goal
 
