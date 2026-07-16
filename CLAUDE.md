@@ -323,6 +323,98 @@ Running list of follow-ups (check off as done; newest at the bottom).
       `qwen -p` silently blocks every write/edit tool without `--yolo`, because there's no TTY
       to approve — so `--yolo` is mandatory for the eval, which is exactly why the sandbox
       matters.)
+- [ ] **Chat frontend (Open WebUI) reachable from anywhere, under a stable name.**
+  **NO DECISION YET — needs its own planning session.** Options below are scoped + costed;
+  pick one there, then write the design doc. Today the UI is `http://192.168.1.22:3000` —
+  LAN-only, IP-typed, no name, no TLS.
+  - **Requirement (firm, 2026-07-16):** a **non-technical user (spouse)** opens a URL from
+    **anywhere** (phone, café, hotel) and logs in. **No VPN client, no config, no install.**
+    Preserve the self-sovereign posture *as far as that requirement allows*. Latency matters
+    subjectively (see "latency is mostly a non-issue" below).
+  - **⚠️ Public-repo rule:** a hostname that resolves to the **home** IP is a deanonymisation
+    vector and **must never be committed** — placeholder `<CHAT_HOST>`, real value on the box.
+    Same reason `<DDNS_HOST>` is redacted. Note the *domain* `nodrama.io` is safe to name here
+    (it's already tied to the same identity and points at CloudFront, not the house) — what
+    must never land in git is a **record pointing home**, in *either* repo. The sibling repo
+    `github.com/fbielejec/nodrama.io` (AWS control plane: CloudFormation, Route53 zone,
+    profile `nodrama`, region **us-east-1**) is **also public** — a redirect/CNAME target
+    baked into a CFN template there leaks exactly like a doc would.
+  - **Option A — WireGuard + static name → `10.10.0.1`.** Not DDNS at all; the name is fixed.
+    - *Pros:* zero new infra/exposure/cost; reuses `wg0`; nothing public; strongest posture.
+    - *Cons:* **fails the firm requirement** — needs a VPN client + config on her phone.
+      Also the two-networks problem (below). Keep documented as the cheapest option and the
+      right answer if the requirement ever softens to "me, from my laptop".
+  - **Option B — forward `:443` on the b-box → caddy on weebeastie → Open WebUI.**
+    - *Pros:* no third party at all; lowest latency (direct); one more router rule; cert via
+      ACME. Meets the requirement.
+    - *Cons:* **publishes the home IP** in public DNS — the deanonymisation vector the whole
+      redaction policy exists to prevent, and *worse* under `nodrama.io` (WHOIS + MEP site tie
+      the house to a real name). Needs DDNS (sticky-not-static IP). Public login page.
+  - **Option C — S3 redirect (`chat.<domain>` → 301 → target).** *Investigated 2026-07-16;*
+    *documented dead end — don't re-derive.*
+    - **A signpost, not a road.** S3 answers 301 and nothing else; the browser then connects
+      **directly** to the target, so S3 carries no traffic, hides no IP (target lands in the
+      address bar and gets bookmarked), and can't proxy. The existing apex→`blog.nodrama.io`
+      redirect (`cloudformation/nodrama-io.yml`) is the *correct* use of this pattern.
+    - Can't carry it even in principle: that distribution is `AllowedMethods: GET, HEAD` —
+      Open WebUI needs POST (login/chat) + WebSockets (streaming).
+    - Steelman ("pretty name over a dynamic IP, no EC2") collapses: a plain
+      `CNAME chat.<domain> → <DDNS_HOST>` does it better — no redirect hop, no method limit,
+      pretty URL stays. So: **willing to publish the home IP ⇒ CNAME beats the redirect;
+      unwilling ⇒ neither works.** No configuration makes S3 the right tool here.
+  - **Option D — CloudFront with a custom origin (real proxy, not a redirect).**
+    - *Pros:* genuinely proxies; WebSockets supported; ACM certs; stable name; reuses Route53.
+    - *Cons:* **terminates TLS ⇒ Amazon sees all plaintext** (the posture violation the
+      passthrough relay exists to avoid); origin must still be publicly reachable ⇒ **home IP
+      still exposed** (mitigable via CF prefix-list firewall + secret header, but fiddly and
+      **fails open** if misconfigured). Loses to Option E on both axes; CF traffic likely
+      costs more than the nano.
+  - **Option E — minimal EC2 relay, WireGuard dial-out, TLS passthrough.** *(leading candidate
+    on the merits so far — NOT a decision)*
+    - Shape: `chat.<domain>` → Elastic IP of a **`t4g.nano` in eu-west-3 (Paris)** ·
+      weebeastie **dials out** over WG (`PersistentKeepalive`) · EC2 **DNATs `:443`** into the
+      tunnel, **TLS passthrough (no keys, no plaintext on AWS)** · home caddy terminates with
+      a real cert via **Route53 DNS-01** (zone + creds already exist; use a **scoped IAM user**
+      limited to TXT on that zone) → Open WebUI.
+    - *Pros:* **static A record — no DDNS, no updater, no deSEC** (dissolves the original DNS
+      problem); **home IP never in public DNS** ← *the actual win here, not NAT traversal*;
+      no new inbound rule at home; same URL home + away; survives IP churn; AWS sees only
+      ciphertext + metadata (no keys, no chat history, no RAG index).
+    - *Cons:* ~**$5–8/mo** (nano + IPv4 charge — *reconfirm current pricing*); a box to patch;
+      home chat then depends on the line being up (today the LAN UI works regardless);
+      trombone routing; public login page (see below).
+    - ⚠️ **Do NOT reuse the existing us-east-1 instance.** Two independent reasons: (1) wrong
+      region — Brussels↔us-east-1 ≈ 90 ms each way ⇒ ~360 ms RTT tromboned; (2) **blast
+      radius** — that box is the **public WordPress MEP site**, a WP
+      compromise would land an attacker inside a tunnel next to the model + Qdrant index.
+      The relay must be **separate, minimal, single-purpose**.
+  - **Option F — managed tunnel (Tailscale Funnel / cloudflared).** Not yet analysed.
+    - *Pros:* least to build/patch; solves NAT, TLS, and naming in one.
+    - *Cons:* third-party control plane — the same category as the **already-rejected**
+      NordVPN Meshnet; cloudflared **terminates TLS** (plaintext at Cloudflare = Option D's
+      flaw); custom-domain support + whether Funnel terminates or passes through **needs
+      verification, don't assume**.
+  - **Cross-cutting (established 2026-07-16, don't re-derive):**
+    - **Latency is mostly a non-issue.** Model gen is **8.8 t/s ≈ 114 ms/token**; a 300-token
+      answer ≈ 34 s. Tokens stream over one TCP connection, so added RTT is a **constant
+      offset on TTFT, not a per-token tax** — even a transatlantic hop costs ~1% of response
+      time. Where it *is* felt is **UI interactivity** (login, page loads) at ~360 ms/RTT =
+      "slow site" to a non-technical user. An **EU relay (~25–30 ms trombone) makes it
+      imperceptible**; Route53 is global so region choice costs nothing elsewhere.
+    - **The relay's win is IP-hiding, NOT NAT traversal.** NAT traversal is genuinely unneeded
+      (public non-CGNAT IP + working forward) — that's what killed Meshnet. But *that reasoning
+      does not carry over*: no direct-forward design can hide the house, and a relay can.
+    - **A public login page is irreducible** for "non-technical, no VPN client, anywhere" — it
+      becomes the whole security boundary. No option avoids it (except A, which fails the
+      requirement). Mitigations to spec at planning time: signup disabled, strong unique
+      password, rate-limit/fail2ban at the home caddy, pinned image kept current.
+    - **Two-networks problem** (applies to A/B): home → `192.168.1.22`, away → `10.10.0.1`;
+      one public A record can't be both (**the b-box doesn't hairpin** — same trap as
+      `make away`). Options: two names, local DNS override, or WG at home too (rejected — see
+      the "don't enable `wg-quick` on the laptop" gotcha). **E and D make this moot.**
+  - Context: `deploy/openwebui/` · `docs/plans/2026-07-08-lan-chat-frontend-openwebui-design.md`
+    · remote-access work above (`wg0`, deSEC updater) · `~/CloudStation/DevOps/nodrama/`
+    (AWS footprint; its `docs/BACKLOG-INFRA.md` should get a pointer once this is decided).
 
 ## Docs
 
