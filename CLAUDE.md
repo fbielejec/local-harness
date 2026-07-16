@@ -11,9 +11,10 @@ Orientation for agents. Read this, then `program.md` (the optimization loop) and
 a **deanonymisation** vector — name → ISP → geolocation — which matters more than any port,
 given the MEP-office documents this project handles. Redacted in place; history rewritten.
 
-**Never commit:** home public IPs (v4/v6, prefixes), MAC addresses, WireGuard/SSH **private**
+**Never commit:** home public IPs (v4/v6, prefixes), **the DDNS hostname** (it *resolves* to
+the home IP — publishing it undoes the redaction), MAC addresses, WireGuard/SSH **private**
 keys, API tokens (deSEC, Exa), `.env` files, or router credentials. Use placeholders —
-`<HOME_IPV4>`, `<HOME_V6_PREFIX>` — and keep the real values on the boxes.
+`<HOME_IPV4>`, `<HOME_V6_PREFIX>`, `<DDNS_HOST>` — and keep the real values on the boxes.
 
 **Safe to commit:** LAN addresses (`192.168.1.22`, `10.10.0.x`) — RFC1918, meaningless
 off-network. ISP names and RIPE allocation ranges — they identify a company across thousands

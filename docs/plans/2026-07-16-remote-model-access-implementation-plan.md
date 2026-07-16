@@ -475,7 +475,7 @@ a stale address indefinitely and DDNS is decorative.
 **Step 1: Confirm the helper shipped**
 
 ```bash
-ls /usr/share/wireguard-tools/examples/reresolve-dns/reresolve-dns.sh
+ls /usr/share/doc/wireguard-tools/examples/reresolve-dns/reresolve-dns.sh
 ```
 
 If missing, fetch it from the `wireguard-tools` source tree at the matching version.
@@ -490,7 +490,7 @@ After=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/share/wireguard-tools/examples/reresolve-dns/reresolve-dns.sh wg0
+ExecStart=/usr/share/doc/wireguard-tools/examples/reresolve-dns/reresolve-dns.sh wg0
 EOF
 cat > /etc/systemd/system/wg-reresolve.timer <<EOF
 [Unit]
@@ -612,10 +612,21 @@ curl -s -m3 http://192.168.1.22:8080/v1/models && echo "BROKEN: model exposed on
 
 The second check asserts the invariant rather than assuming it.
 
-**Step 6: Persist on the laptop, now that it's proven**
+**Step 6: Do NOT enable wg-quick@wg0 at boot**
+
+An earlier draft of this plan ended here with `systemctl enable wg-quick@wg0`. **That is
+wrong**, and running the plan proved it: the endpoint is the home *public* IP and the router
+does not hairpin, so an auto-started tunnel is **permanently broken at home** — which is where
+the laptop lives most of the time. You'd get a live `wg0`, a dead `10.10.0.1`, and `ssh`
+hanging for minutes on the one network where everything is actually fine.
+
+Use the Makefile targets instead — explicit, and they fail fast with an explanation:
 
 ```bash
-sudo systemctl enable wg-quick@wg0
+make tunnels      # at home  — straight over the LAN
+make away         # off-LAN  — wg-quick up (+ reachability check) then all tunnels over it
+make away-stop    # tear it all down
+make wg-status    # endpoint / handshake / transfer
 ```
 
 ---

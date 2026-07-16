@@ -91,7 +91,7 @@ by the time it bites. DDNS makes the endpoint self-healing.
 **Gotcha:** `wg-quick` resolves `Endpoint` **once, at interface start, and never
 re-resolves.** DDNS alone does not fix this — the tunnel will sit pointed at the stale
 address indefinitely. You also need `reresolve-dns` on a timer (ships with `wireguard-tools`
-under `/usr/share/wireguard-tools/examples/reresolve-dns/`), or an explicit restart.
+under `/usr/share/doc/wireguard-tools/examples/reresolve-dns/`), or an explicit restart.
 
 ## Configuration
 
