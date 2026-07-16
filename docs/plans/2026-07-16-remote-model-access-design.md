@@ -71,14 +71,21 @@ travel laptop (café)                        weebeastie (home, Proximus BE)
       filip@10.10.0.1               ═══════▶  127.0.0.1:8080  llama-server
    wg0 10.10.0.2                              127.0.0.1:8081  rag-server (later)
         └── WireGuard (X25519) ──┘
-            + SSH (ed25519)
+            + SSH (RSA-4096, rsa-sha2-512)
 ```
 
-**Two key types, two jobs.** WireGuard uses X25519 (ECDH); SSH uses ed25519 (signatures).
-The curves are birationally equivalent so conversion is *mathematically* possible, but the
-tooling doesn't accept it and reusing one keypair across a signature scheme and a
-key-agreement scheme is a genuine footgun. Generate WireGuard keys fresh (two commands);
-the SSH keys are the ones you already have and don't change.
+**Two key types, two jobs.** WireGuard uses X25519 (ECDH). SSH authenticates the *user* with
+the existing **RSA-4096** key (`~/.ssh/id_rsa`) — verified 2026-07-16; an earlier draft of this
+doc said ed25519, having confused it with weebeastie's ed25519 **host** key, which is a
+different key doing a different job. Signatures negotiate `rsa-sha2-512` (the `ssh-rsa` label
+in `authorized_keys` is the *key type*, not the deprecated SHA-1 signature algorithm), so
+RSA-4096 here is sound and needs no churn.
+
+The two key types are unrelated and non-interchangeable: generate WireGuard keys fresh (two
+commands) and leave the SSH key alone. The answer wouldn't change with an ed25519 SSH key
+either — ed25519 and X25519 are birationally equivalent so conversion is *mathematically*
+possible, but WireGuard's tooling doesn't accept it, and reusing one keypair across a
+signature scheme and a key-agreement scheme is a genuine footgun.
 
 **Why SSH-over-WireGuard rather than binding to `wg0`.** The shortcut is `--host 10.10.0.1`
 on llama-server, skipping SSH. Rejected: it would need llama.cpp's `--api-key` (a bearer

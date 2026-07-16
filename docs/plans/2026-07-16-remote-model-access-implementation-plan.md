@@ -35,7 +35,7 @@ outside the home LAN, without changing the loopback-only binding.
 (`10.10.0.2`) tunnels to it and then runs the *existing* SSH local-forward
 (`-L 8080:127.0.0.1:8080`) over that tunnel. `llama-server` stays bound to `127.0.0.1:8080`
 and never learns any of this happened. WireGuard authenticates the tunnel (X25519), SSH
-authenticates the user (existing ed25519 keys). Design + rationale:
+authenticates the user (existing RSA-4096 key). Design + rationale:
 `docs/plans/2026-07-16-remote-model-access-design.md`.
 
 **Tech Stack:** WireGuard (in-kernel, `wireguard-tools`) · OpenSSH (already deployed) ·

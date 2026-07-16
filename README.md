@@ -361,7 +361,7 @@ box and `qwen` works exactly as at home. Design + rationale:
 
 **The invariant: `llama-server` is unchanged.** It stays bound to `127.0.0.1:8080` and never
 learns any of this happened. WireGuard authenticates the tunnel (X25519); SSH authenticates
-the user (existing ed25519 keys); the SSH forward is byte-identical to the LAN one — only the
+the user (existing RSA-4096 key); the SSH forward is byte-identical to the LAN one — only the
 host changes. The model is never bound to a network interface, so there is no new auth surface
 and no `--api-key` bearer string to leak.
 
