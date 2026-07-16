@@ -172,8 +172,13 @@ Running list of follow-ups (check off as done; newest at the bottom).
     But RIPE marks it `Proximus … xDSL customers (dynamic)` — the IP is **sticky, not static**
     ⇒ DDNS (deSEC.io) is required, else you get **locked out** when the line resyncs while
     you're away (can't learn the new IP without access to the house). `wg-quick` resolves
-    `Endpoint` **once at start and never re-resolves** — DDNS alone is not enough, needs
-    `reresolve-dns` on a timer. Native IPv6 exists (`<HOME_V6_PREFIX>::/64`) but is a
+    `Endpoint` **once at start and never re-resolves** — but the fix is just to bounce the
+    tunnel (`make away-stop && make away`), which re-resolves. A `reresolve-dns` timer was
+    considered and **rejected as YAGNI**: an IP change kills the SSH session anyway, so
+    auto-healing the WireGuard layer rescues nothing, and the script's 135 s staleness
+    threshold + 2 min timer make it *slower* (~4 min) than the manual bounce (~10 s). It would
+    only earn its place for something unattended that must stay connected. Native IPv6 exists
+    (`<HOME_V6_PREFIX>::/64`) but is a
     **fallback only**: café wifi is often IPv4-only, and both v6 addrs are dynamic.
   - **Rejected:** NordVPN Meshnet (closed-source **root daemon** on the box holding the models
     + RAG index; iptables conflict with Docker/Open WebUI; its only real win — NAT traversal —

@@ -466,50 +466,38 @@ git add README.md && git commit -m "docs: record remote access runbook"
 
 ---
 
-## Task 10: Endpoint re-resolution on the laptop
+## Task 10: ~~Endpoint re-resolution on the laptop~~ — DROPPED (YAGNI)
 
-**Rationale:** `wg-quick` resolves `Endpoint` **once, at interface start, and never
-re-resolves.** DDNS alone does not fix the lockout — without this, the tunnel sits pointed at
-a stale address indefinitely and DDNS is decorative.
+**Kept as a record of the reasoning, not as work to do.**
 
-**Step 1: Confirm the helper shipped**
+The original task installed `reresolve-dns` (ships with `wireguard-tools` at
+`/usr/share/doc/wireguard-tools/examples/reresolve-dns/`) on a 2-minute systemd timer, on the
+premise that `wg-quick` resolves `Endpoint` **once at interface start and never re-resolves**,
+so DDNS alone can't heal a live tunnel.
 
-```bash
-ls /usr/share/doc/wireguard-tools/examples/reresolve-dns/reresolve-dns.sh
-```
+The premise is true. The conclusion didn't follow. **Dropped because:**
 
-If missing, fetch it from the `wireguard-tools` source tree at the matching version.
+1. **It rescues nothing.** When the tunnel dies, the SSH session and its forward die with it.
+   Healing the WireGuard layer underneath doesn't restore the session — you re-establish SSH by
+   hand anyway, which means `make away`, which re-resolves. The window it covers is already
+   covered.
+2. **It's slower than the alternative.** The script only acts once a handshake is >135 s stale,
+   plus up to 2 min of timer: ~4 min worst case. A manual `make away-stop && make away` is ~10 s.
+   The automation is slower than the thing it automates.
+3. **It only pays for unattended connections** — a network mount, `autossh`, a headless box that
+   must dial home. None exist here.
 
-**Step 2: Timer**
+**What replaces it:** a line in the README — *tunnel died? `make away-stop && make away`* — and
+the `make away` target itself, which resolves fresh on every invocation.
 
-```bash
-sudo sh -c 'cat > /etc/systemd/system/wg-reresolve.service <<EOF
-[Unit]
-Description=Re-resolve WireGuard endpoint DNS
-After=network-online.target
+**Revisit if** something long-lived and unattended ever depends on the tunnel staying up.
 
-[Service]
-Type=oneshot
-ExecStart=/usr/share/doc/wireguard-tools/examples/reresolve-dns/reresolve-dns.sh wg0
-EOF
-cat > /etc/systemd/system/wg-reresolve.timer <<EOF
-[Unit]
-Description=Re-resolve WireGuard endpoint every 2 minutes
-
-[Timer]
-OnBootSec=2min
-OnUnitActiveSec=2min
-
-[Install]
-WantedBy=timers.target
-EOF
-systemctl daemon-reload && systemctl enable --now wg-reresolve.timer'
-```
-
-**Step 3: Verify**
+**If an earlier run already installed it:**
 
 ```bash
-systemctl list-timers wg-reresolve.timer --no-pager
+sudo systemctl disable --now wg-reresolve.timer
+sudo rm -f /etc/systemd/system/wg-reresolve.{timer,service} /usr/local/bin/wg-reresolve-dns
+sudo systemctl daemon-reload
 ```
 
 ---

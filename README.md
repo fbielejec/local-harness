@@ -376,9 +376,14 @@ hanging `ssh` for minutes.
 the home IP is *sticky*, not static. Without DDNS, a line resync while you're abroad is an
 **unrecoverable lockout**: fixing the hardcoded endpoint needs the new IP, and learning the new
 IP needs access to the house. deSEC (`<DDNS_HOST>`, TTL 60) + a 5-min updater timer on
-weebeastie closes it. ⚠️ `wg-quick` resolves `Endpoint` **once at interface start and never
-re-resolves** — DDNS alone is not enough; the `wg-reresolve` timer on the laptop is what makes
-it self-healing.
+weebeastie closes it.
+
+**Tunnel died mid-session? Bounce it:** `make away-stop && make away`. `wg-quick` resolves
+`Endpoint` **once at interface start and never re-resolves**, so a live tunnel sits on a stale
+address — but a bounce re-resolves, and every `make away` starts fresh anyway. A `reresolve-dns`
+timer was considered and **rejected as YAGNI**: an IP change kills the SSH session regardless, so
+healing the WireGuard layer rescues nothing, and it'd be *slower* (~4 min) than bouncing by hand
+(~10 s). See the design doc for the full reasoning.
 
 ⚠️ **The updater deletes the AAAA record on purpose** (`curl -4` + `myipv6=`). weebeastie has
 native IPv6, and a published AAAA would let `wg-quick` resolve the endpoint to v6 — which works
@@ -389,10 +394,10 @@ the raw IP and the DDNS hostname. That test also settled the one fact unfalsifia
 the LAN — the public IPv4 is **not** behind carrier NAT. Testing the forward *from* the LAN is a
 false negative (hairpinning); use NordVPN or a phone hotspot.
 
-**Pending:** `wg-reresolve` timer (laptop) · sshd hardening (`PasswordAuthentication no`,
-`PermitRootLogin no`) · Stage-2 verification from a phone hotspot (carrier CGNAT — a harder,
-more realistic test than a clean Nord datacenter exit) · proving DDNS *recovery* by forcing a
-new lease (today only proves the updater runs, not that it heals).
+**Pending:** sshd hardening (`PasswordAuthentication no`, `PermitRootLogin no`) · Stage-2
+verification from a phone hotspot (carrier CGNAT — a harder, more realistic test than a clean
+Nord datacenter exit) · proving DDNS *recovery* by forcing a new lease (today only proves the
+updater runs, not that it heals).
 
 ⚠️ **Secrets:** `/etc/wireguard/*` and `/etc/desec-updater.env` are root-only and live outside
 the repo. This repo is **public** — never commit the home IP, the DDNS hostname, or private

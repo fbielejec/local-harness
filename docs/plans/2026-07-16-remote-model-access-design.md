@@ -89,9 +89,26 @@ Chicken-and-egg, and a sticky IP makes it *rare enough that you'll have forgotte
 by the time it bites. DDNS makes the endpoint self-healing.
 
 **Gotcha:** `wg-quick` resolves `Endpoint` **once, at interface start, and never
-re-resolves.** DDNS alone does not fix this — the tunnel will sit pointed at the stale
-address indefinitely. You also need `reresolve-dns` on a timer (ships with `wireguard-tools`
-under `/usr/share/doc/wireguard-tools/examples/reresolve-dns/`), or an explicit restart.
+re-resolves.** A live tunnel will sit pointed at a stale address indefinitely.
+
+**The fix is a bounce, not a daemon.** `wg-quick down && up` re-resolves (it calls `wg setconf`,
+which resolves hostnames at that moment) — so `make away-stop && make away` is the whole remedy.
+Every `make away` therefore starts with a fresh DNS answer; the only exposure is an IP change
+*mid-session*.
+
+**`reresolve-dns` on a timer: considered and rejected (YAGNI).** `wireguard-tools` ships one
+(`/usr/share/doc/wireguard-tools/examples/reresolve-dns/`) and the obvious move is to run it on
+a timer. Three reasons not to:
+
+1. **It rescues nothing.** When the tunnel dies the SSH session and its forward die with it.
+   Auto-healing the WireGuard layer underneath doesn't bring the session back — you re-establish
+   SSH by hand regardless, and that means running `make away`, which re-resolves anyway.
+2. **It's slower than the thing it replaces.** The script only acts once a handshake is >135 s
+   stale, and a 2-min timer tops that up: ~4 min worst case, versus ~10 s to bounce it yourself.
+3. **It only pays off for unattended connections** — a network mount, `autossh`, a headless box
+   that must dial home. None exist here; a human runs `make away` on sitting down.
+
+Revisit only if something long-lived and unattended ever depends on the tunnel.
 
 ## Configuration
 
