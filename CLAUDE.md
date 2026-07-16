@@ -3,6 +3,24 @@
 Orientation for agents. Read this, then `program.md` (the optimization loop) and
 `docs/plans/2026-07-06-local-coding-harness-design.md` (the full design).
 
+## ⚠️ THIS REPO IS PUBLIC — github.com/fbielejec/local-harness
+
+**Nothing identifying the household goes in a commit.** This bit the project once
+(2026-07-16: a design doc recorded the home public IPv4 + IPv6 prefix, and it reached public
+`main` before anyone noticed). The repo is tied to a real name and email, so a home IP here is
+a **deanonymisation** vector — name → ISP → geolocation — which matters more than any port,
+given the MEP-office documents this project handles. Redacted in place; history rewritten.
+
+**Never commit:** home public IPs (v4/v6, prefixes), MAC addresses, WireGuard/SSH **private**
+keys, API tokens (deSEC, Exa), `.env` files, or router credentials. Use placeholders —
+`<HOME_IPV4>`, `<HOME_V6_PREFIX>` — and keep the real values on the boxes.
+
+**Safe to commit:** LAN addresses (`192.168.1.22`, `10.10.0.x`) — RFC1918, meaningless
+off-network. ISP names and RIPE allocation ranges — they identify a company across thousands
+of customers, not a house.
+
+**Before writing any measured network fact into a doc, run `git remote -v` first.**
+
 ## What this project is
 
 A self-hosted agentic coding setup: an open-weights coding model served locally, driven by
@@ -142,6 +160,30 @@ preserved (reasoning 1.50/5 ≥ 1.00 baseline; agent-pack **5/5** = baseline). F
 
 Running list of follow-ups (check off as done; newest at the bottom).
 
+- [~] **Remote access to the local harness model** — reach `:8080/v1` from a travel laptop.
+  Design (validated, not implemented): `docs/plans/2026-07-16-remote-model-access-design.md`;
+  step-by-step: `docs/plans/2026-07-16-remote-model-access-implementation-plan.md`.
+  - **Decided:** self-hosted **WireGuard** on weebeastie (one router rule: `UDP 51820 →
+    192.168.1.22`) + **SSH over the tunnel**. `llama-server` binding is **UNCHANGED** —
+    stays `127.0.0.1:8080`, never bound to any interface; the tunnel command is byte-identical
+    to today's, only the host changes (`filip@10.10.0.1`).
+  - **Don't relearn:** public IPv4 `<HOME_IPV4>` is **not CGNAT** ⇒ port forwarding works.
+    But RIPE marks it `Proximus … xDSL customers (dynamic)` — the IP is **sticky, not static**
+    ⇒ DDNS (deSEC.io) is required, else you get **locked out** when the line resyncs while
+    you're away (can't learn the new IP without access to the house). `wg-quick` resolves
+    `Endpoint` **once at start and never re-resolves** — DDNS alone is not enough, needs
+    `reresolve-dns` on a timer. Native IPv6 exists (`<HOME_V6_PREFIX>::/64`) but is a
+    **fallback only**: café wifi is often IPv4-only, and both v6 addrs are dynamic.
+  - **Rejected:** NordVPN Meshnet (closed-source **root daemon** on the box holding the models
+    + RAG index; iptables conflict with Docker/Open WebUI; its only real win — NAT traversal —
+    is unneeded given a public IP). Proton/Nord *as VPNs* are a category error: they solve
+    egress privacy, this needs ingress. claude-code Remote Control is unusable — it hard-requires
+    `api.anthropic.com` (disables itself if `ANTHROPIC_BASE_URL` differs) and persists the full
+    transcript server-side. Its one good idea is the **dial-out topology**, only worth it if the
+    scope ever widens to driving an agent at home from a phone.
+  - **Next:** DHCP-reserve `192.168.1.22` → b-box port-forward → keygen + both `wg0.conf` →
+    handshake (`wg show`) is also the carrier-NAT falsification test → verify from a **real**
+    foreign network (LAN testing proves nothing).
 - [~] **RAG(s)** — EP-committee RAG, maximal-Rust. Full design + status:
   `docs/plans/2026-07-10-ep-committee-rag-design.md`. Code: `rag/` (cargo workspace, `rag/Makefile`).
   - **Goal:** grounded, cited Q&A over EMPL/REGI/IMCO EP committee PDFs (for spouse's MEP
