@@ -164,7 +164,10 @@ Maps the laptop's `localhost:8080` to the server's loopback `8080`:
 ssh -fN -L 8080:127.0.0.1:8080 filip@192.168.1.22
 curl -s http://localhost:8080/v1/models | head -c 200      # round-trip check
 ```
-Stop later: `pkill -f "ssh -fN -L 8080"`.
+Stop later: `pkill -f "ssh -fN -L 8080"`. Or `make tunnels` / `make tunnels-stop`.
+
+**Off the home LAN?** Same tunnel, wrapped in WireGuard — `make away`. See
+*Remote access (WireGuard)* below.
 
 ## 4. [client] Qwen-Code harness
 
@@ -330,6 +333,71 @@ Stop later: `pkill -f "ssh -fN -L 16333"`.
   systemd unit, register it as Open WebUI's second model
   (`docs/plans/2026-07-11-openwebui-rag-integration-design.md`).
 
+# Remote access (WireGuard) — 2026-07-16
+
+Reach the model from outside the house — a travel laptop points `OPENAI_BASE_URL` at the home
+box and `qwen` works exactly as at home. Design + rationale:
+`docs/plans/2026-07-16-remote-model-access-design.md` · steps:
+`docs/plans/2026-07-16-remote-model-access-implementation-plan.md`.
+
+**The invariant: `llama-server` is unchanged.** It stays bound to `127.0.0.1:8080` and never
+learns any of this happened. WireGuard authenticates the tunnel (X25519); SSH authenticates
+the user (existing ed25519 keys); the SSH forward is byte-identical to the LAN one — only the
+host changes. The model is never bound to a network interface, so there is no new auth surface
+and no `--api-key` bearer string to leak.
+
+```
+travel laptop                                weebeastie (home)
+  make away                                    wg0 10.10.0.1 ◀── UDP 51820 forwarded
+   ├─ wg-quick up wg0  ═══ WireGuard ═══▶      sshd (LAN + wg0 only; :22 NOT forwarded)
+   └─ ssh -fN -L 8080 filip@10.10.0.1  ───▶    127.0.0.1:8080 llama-server
+```
+
+**Use it:**
+```bash
+make away         # off-LAN: wg up (+ reachability check) → llama/qdrant/mcp tunnels over it
+make tunnels      # at home: straight over the LAN (make away will NOT work here — see below)
+make wg-status    # endpoint / handshake / transfer
+make away-stop    # tear it all down
+```
+
+**Router:** one rule — `UDP 51820 → 192.168.1.22`. Port **22 is deliberately not forwarded**:
+WireGuard is the front door, SSH lives behind it. An unauthenticated WireGuard packet draws *no
+reply at all*, so the box stays invisible to internet-wide scanners.
+
+**`make away` only works from OUTSIDE the house.** The endpoint is the home public IP and the
+b-box doesn't do NAT loopback (hairpinning), so from the LAN the packets die at the router. This
+is also why the tunnel is **not** a boot-time service — an auto-started tunnel would be
+permanently broken at home, which is where the laptop mostly is. `wg-up` pings the peer and
+tears the interface back down on failure, so this fails in 3 s with an explanation instead of
+hanging `ssh` for minutes.
+
+**DDNS is load-bearing, not a nicety.** RIPE marks the ISP range `xDSL customers (dynamic)` —
+the home IP is *sticky*, not static. Without DDNS, a line resync while you're abroad is an
+**unrecoverable lockout**: fixing the hardcoded endpoint needs the new IP, and learning the new
+IP needs access to the house. deSEC (`<DDNS_HOST>`, TTL 60) + a 5-min updater timer on
+weebeastie closes it. ⚠️ `wg-quick` resolves `Endpoint` **once at interface start and never
+re-resolves** — DDNS alone is not enough; the `wg-reresolve` timer on the laptop is what makes
+it self-healing.
+
+⚠️ **The updater deletes the AAAA record on purpose** (`curl -4` + `myipv6=`). weebeastie has
+native IPv6, and a published AAAA would let `wg-quick` resolve the endpoint to v6 — which works
+beautifully at home and then fails on IPv4-only café wifi, i.e. exactly when you can't debug it.
+
+**Verified (2026-07-16):** handshake + model response from outside via a NordVPN exit, over both
+the raw IP and the DDNS hostname. That test also settled the one fact unfalsifiable from inside
+the LAN — the public IPv4 is **not** behind carrier NAT. Testing the forward *from* the LAN is a
+false negative (hairpinning); use NordVPN or a phone hotspot.
+
+**Pending:** `wg-reresolve` timer (laptop) · sshd hardening (`PasswordAuthentication no`,
+`PermitRootLogin no`) · Stage-2 verification from a phone hotspot (carrier CGNAT — a harder,
+more realistic test than a clean Nord datacenter exit) · proving DDNS *recovery* by forcing a
+new lease (today only proves the updater runs, not that it heals).
+
+⚠️ **Secrets:** `/etc/wireguard/*` and `/etc/desec-updater.env` are root-only and live outside
+the repo. This repo is **public** — never commit the home IP, the DDNS hostname, or private
+keys. See the warning at the top of `CLAUDE.md`.
+
 # Docs
 
 - `CLAUDE.md` — orientation for agents (hardware, ops, findings, TODOs).
@@ -342,3 +410,5 @@ Stop later: `pkill -f "ssh -fN -L 16333"`.
 - `docs/plans/2026-07-11-openwebui-rag-integration-design.md` — wiring the RAG behind Open WebUI (design; crates built, deploy pending).
 - `docs/plans/2026-07-11-rag-server-implementation-plan.md` — the `rag-server` build plan (Phases 0–3 done, Phase 4 deploy pending).
 - `docs/plans/2026-07-08-lan-chat-frontend-openwebui-design.md` — the Open WebUI chat frontend.
+- `docs/plans/2026-07-16-remote-model-access-design.md` — remote access via WireGuard (design + rejected alternatives).
+- `docs/plans/2026-07-16-remote-model-access-implementation-plan.md` — the 13-task WireGuard build plan.
