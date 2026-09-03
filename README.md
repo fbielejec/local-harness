@@ -156,10 +156,11 @@ DRY_RUN=1 make deploy-units
 `install-tools` separately puts the pipeline binaries (`ingest`, `index`, `parse-gate`,
 `embed-gate`, `fetch`) on `PATH`. They are not services and `install-server` does not build them.
 
-> **`cargo` is not on the non-interactive `PATH`.** `ssh box 'make install-server'` runs a
-> non-interactive shell, `~/.bashrc` returns early at its `case $- in *i*` guard, and
-> `~/.cargo/bin` is absent. The install scripts resolve `cargo` explicitly (`$CARGO` → `PATH`
-> → `~/.cargo/bin/cargo`); anything else you run over `ssh` needs the same care.
+> **Nothing from `~/.bashrc.d/` is on the non-interactive `PATH`.** `ssh box 'make install-server'`
+> runs a non-interactive shell, `~/.bashrc` returns early at its `case $- in *i*` guard, and neither
+> `~/.cargo/bin` nor nvm is loaded — so `cargo` and `node` both look uninstalled when they are not.
+> The install scripts resolve cargo explicitly (`$CARGO` → `PATH` → `~/.cargo/bin/cargo`) and source
+> nvm before using node; anything else you run over `ssh` needs `bash -lc`.
 
 **Check if it's running** (no sudo):
 

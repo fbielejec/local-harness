@@ -108,10 +108,13 @@ install, `daemon-reload`). Every tier is separately runnable and skips when its 
 which unit files changed. `make restart-server` is the only step that takes downtime, and it drops
 the warm KV cache (~190 s to re-prefill). `DRY_RUN=1 make deploy-units` previews without writing.
 
-⚠️ **`cargo` is NOT on the non-interactive `PATH`.** `ssh weebeastie 'make install-server'` runs a
-non-interactive shell, so `~/.bashrc` returns early at its `case $- in *i*` guard and `~/.cargo/bin`
-never gets added. The install scripts resolve it explicitly (`$CARGO` → `PATH` → `~/.cargo/bin/cargo`);
-anything else run over `ssh` needs the same treatment.
+⚠️ **Nothing from `~/.bashrc.d/` is on the non-interactive `PATH` — not `cargo`, not `node`.**
+`ssh weebeastie 'make install-server'` runs a non-interactive shell, so `~/.bashrc` returns early at
+its `case $- in *i*` guard and neither `~/.cargo/bin` nor nvm ever loads. The install scripts resolve
+cargo explicitly (`$CARGO` → `PATH` → `~/.cargo/bin/cargo`) and source nvm before using node; anything
+else run over `ssh` needs `bash -lc`. **This misleads you into thinking software is missing**: on
+2026-09-03 `command -v node` over `ssh` found nothing on a box with four nvm-installed node versions,
+and the first conclusion drawn was that setup-desktop's node step had failed. It had not.
 
 ⚠️ **`deploy/*.service` are templates, not copies.** They carry `@VAR@` placeholders and are rendered
 with this machine's user, paths and the *resolved* GGUF snapshot path. `render` refuses to emit a unit
@@ -325,10 +328,15 @@ Running list of follow-ups (check off as done; newest at the bottom).
       **normalize whitespace** (pdf-extract emits `"four  months"`).
     - **Drill-2 substrate located:** `EMPL-PR-612058:1 ~ IMCO-PR-773060:1` at **cosine 1.000** —
       byte-identical draft-report preamble across two committees.
-  - **[~] Deploy — reshaped (2026-09-03):** the index snapshot-migration to weebeastie still
-    stands, but the rest of Phase 4 is void: there is no `rag-server` to run as a unit and no
-    second Open WebUI model to register. What runs there is `rag-mcp` (`:8082`). Still open
-    from that plan: the eval harness (recall@k/MRR **vs** groundedness+citation-accuracy).
+  - **[x] Deployed (2026-09-03):** `rag-mcp.service` is live on weebeastie, `enabled`, serving
+    `:8082` from `~/.cargo/bin/rag-mcp` with `WorkingDirectory=~/local-harness/rag`. Installed by
+    `make install-server` and cut over deliberately: the POC unit `ep-rag-mcp.service` (ExecStart
+    in a flat hand-copied directory) was `disable --now`d first, because both bind the same port.
+    `/route` answers with cited context and the startup contract check passes. The rest of Phase 4
+    is void — there is no `rag-server` to run as a unit and no second Open WebUI model to register.
+  - **[ ] Eval harness** — recall@k/MRR **vs** groundedness + citation-accuracy. The one piece of
+    the original Phase 4 plan still outstanding, and the reason "is retrieval getting better?"
+    currently has no answer beyond eyeballing `/route` output.
   - **[x] Conditional/agentic retrieval — delivered by `rag-mcp`:** the problem was
     always-on RAG. RAG-*as-a-model* ran the retrieve loop **unconditionally** on every query with
     no relevance gate (by design: the index is anisotropic, so we "don't threshold raw cosine"),
@@ -355,6 +363,15 @@ Running list of follow-ups (check off as done; newest at the bottom).
       and `telemetry.enabled: false` (OTLP exporter). Local usage recording
       (`~/.qwen/usage_record.jsonl`) stays — it never leaves the LAN. Backup:
       `~/.qwen/settings.json.bak-20260708`. Env overrides exist too (`QWEN_TELEMETRY_ENABLED`).
+    - [x] **Single-sourced (2026-09-03).** The settings now live at `deploy/qwen/settings.json`
+      in THIS repo and are deployed by `make install-client`; `setup-desktop`'s duplicate
+      `local-harness/qwen-settings.json` is deleted. A file naming our own MCP port belonged
+      here, not in the dotfiles. The deploy **merges** (`jq '.[0] * .[1]'`, asset wins conflicts)
+      rather than replacing, because both the user and qwen-code rewrite that file — so a
+      whole-file replace would discard hand edits and emit a fresh `.bak-<ts>` on every run.
+      Consequence to know: `*` **replaces arrays**, so the asset deliberately carries **no**
+      `permissions` block — a hand-added allow-list survives forever precisely because the asset
+      does not name that key. Do not add one here without changing the merge.
     - [ ] **Remaining (real hardening, deferred):** tool-execution **sandbox** on
       (docker/podman/`sandbox-exec`); **no blanket auto-approve** of shell commands (require
       approval or confine to `~/qwen-scratch`); tool allow/deny list (via the `permissions`
