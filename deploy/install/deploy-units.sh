@@ -135,7 +135,14 @@ main() {
       warn "  Cut over deliberately:  sudo systemctl disable --now $old && make restart-server"
       continue
     fi
-    $SUDO systemctl enable "$u" >/dev/null 2>&1 || warn "could not enable $u"
+    # Already-enabled is the common case on a re-run, and `enable` needs root —
+    # so calling it unconditionally makes every no-sudo re-run print a warning
+    # about work that does not need doing. Ask first.
+    if [ "$(systemctl is-enabled "$u" 2>/dev/null)" = "enabled" ]; then
+      skip "$u already enabled"
+    else
+      $SUDO systemctl enable "$u" >/dev/null 2>&1 || warn "could not enable $u"
+    fi
   done
 
   # ── Compose stacks. Idempotent, and a no-op when the running config matches. ─
