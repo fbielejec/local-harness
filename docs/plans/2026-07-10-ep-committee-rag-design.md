@@ -263,5 +263,4 @@ docs/plans/2026-07-10-ep-committee-rag-design.md   (this file)
 
 - Org doc RAG section: `~/CloudStation/LLMs/research/LLMs_README.org` (Lewis et al. 2020
   marginalization; industry retrieve-then-concatenate; gradient decoupling).
-- Prep doc RAG debugging drills: `~/CloudStation/TeXProjects/CV/interview_prep_aiinfra.org`
 - Verified EP source endpoints: research pass 2026-07-10 (this design's §Ingestion).

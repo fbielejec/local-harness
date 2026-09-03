@@ -12,21 +12,21 @@ reboots. Keep the model private; put only the chat UI on the network.
 
 ## Decisions (what & why)
 
-| Question | Decision | Why |
-|----------|----------|-----|
-| What is chatted with | The local LLM | Self-hosted ChatGPT for the household |
-| Frontend | **Open WebUI** (Docker) | Best UX for ~zero custom code; mobile-responsive; per-user history/memory |
-| Host | **weebeastie** | Always-on box where the model lives; laptop is a client |
-| Networking | **`network_mode: host`** | `llama-server` is loopback-only (`127.0.0.1:8080`); a bridged container can't reach a loopback service. Host net lets the container use `localhost:8080` **and** exposes port 3000 to the LAN. Model stays private. |
-| Port | **3000** | 8080 is taken by llama-server under host networking |
-| Reboot survival | `restart: unless-stopped` + docker already `enabled` at boot | No extra systemd unit needed |
-| Isolation posture | Pragmatic + cheap hardening | Trusted single-user home LAN |
-| Auth | **Fixed accounts, signup locked** | Two users (filip admin + spouse) + a shared `guest` account |
-| Provisioning | Manual, once | Passwords never touch git or transcripts; accounts persist in the volume |
-| Memory | Per-user, on by default | Separate accounts ⇒ separate memories, automatically |
-| Document RAG | **Off for now** (no embedder downloaded) | "Leave the retriever model for later"; enable later via admin panel |
-| Web search | **On, via Exa** | User has an Exa API key; a deliberate, consented LAN-exit |
-| Image pin | `ghcr.io/open-webui/open-webui:v0.10.2` | Reproducibility, matching the pinned GGUF ethos |
+| Question             | Decision                                                     | Why                                                                                                                                                                                                                 |
+|----------------------|--------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| What is chatted with | The local LLM                                                | Self-hosted ChatGPT for the household                                                                                                                                                                               |
+| Frontend             | **Open WebUI** (Docker)                                      | Best UX for ~zero custom code; mobile-responsive; per-user history/memory                                                                                                                                           |
+| Host                 | **weebeastie**                                               | Always-on box where the model lives; laptop is a client                                                                                                                                                             |
+| Networking           | **`network_mode: host`**                                     | `llama-server` is loopback-only (`127.0.0.1:8080`); a bridged container can't reach a loopback service. Host net lets the container use `localhost:8080` **and** exposes port 3000 to the LAN. Model stays private. |
+| Port                 | **3000**                                                     | 8080 is taken by llama-server under host networking                                                                                                                                                                 |
+| Reboot survival      | `restart: unless-stopped` + docker already `enabled` at boot | No extra systemd unit needed                                                                                                                                                                                        |
+| Isolation posture    | Pragmatic + cheap hardening                                  | Trusted single-user home LAN                                                                                                                                                                                        |
+| Auth                 | **Fixed accounts, signup locked**                            | Two users (filip admin + spouse) + a shared `guest` account                                                                                                                                                         |
+| Provisioning         | Manual, once                                                 | Passwords never touch git or transcripts; accounts persist in the volume                                                                                                                                            |
+| Memory               | Per-user, on by default                                      | Separate accounts ⇒ separate memories, automatically                                                                                                                                                                |
+| Document RAG         | **Off for now** (no embedder downloaded)                     | "Leave the retriever model for later"; enable later via admin panel                                                                                                                                                 |
+| Web search           | **On, via Exa**                                              | User has an Exa API key; a deliberate, consented LAN-exit                                                                                                                                                           |
+| Image pin            | `ghcr.io/open-webui/open-webui:v0.10.2`                      | Reproducibility, matching the pinned GGUF ethos                                                                                                                                                                     |
 
 ## Architecture
 

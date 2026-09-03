@@ -25,15 +25,15 @@ files and the knowledge already live.
 
 ## Decision table
 
-| Decision | Choice | Rationale |
-|---|---|---|
-| Where the logic lives | This repo | It already owns the units, compose files and the README |
-| Interface | `make install-client` / `install-server` | Symmetric; `setup-desktop` calls one line either way |
-| Server granularity | Tiered sub-targets | The CUDA build and a 16 GiB pull must be independently re-runnable |
-| Client settings owner | This repo | Kills the duplicated `ep-rag` block; the file names *our* MCP port |
-| `rag-server` | Retired | Closes "retire it, or keep on ice" from `2026-07-12-ep-rag-mcp-design.md` §Fate |
-| Restart policy | Never implicit | weebeastie serves live traffic; a deploy must be inert until asked |
-| Unit paths | `~/.cargo/bin` | `cargo clean` can delete a `target/release` binary a unit points at |
+| Decision              | Choice                                   | Rationale                                                                       |
+|-----------------------|------------------------------------------|---------------------------------------------------------------------------------|
+| Where the logic lives | This repo                                | It already owns the units, compose files and the README                         |
+| Interface             | `make install-client` / `install-server` | Symmetric; `setup-desktop` calls one line either way                            |
+| Server granularity    | Tiered sub-targets                       | The CUDA build and a 16 GiB pull must be independently re-runnable              |
+| Client settings owner | This repo                                | Kills the duplicated `ep-rag` block; the file names *our* MCP port              |
+| `rag-server`          | Retired                                  | Closes "retire it, or keep on ice" from `2026-07-12-ep-rag-mcp-design.md` §Fate |
+| Restart policy        | Never implicit                           | weebeastie serves live traffic; a deploy must be inert until asked              |
+| Unit paths            | `~/.cargo/bin`                           | `cargo clean` can delete a `target/release` binary a unit points at             |
 
 ## 1. `make install-client`
 
@@ -128,7 +128,11 @@ when the running config already matches.
 
 On weebeastie the first `install-server` is a **reconciliation, not an install**:
 
-- `rag-mcp` runs `/home/filip/rag-mcp/rag-mcp` — a flat directory holding a hand-copied
+- **The unit is still called `ep-rag-mcp.service`** and is `active`. The repo renamed it to
+  `rag-mcp.service` on 2026-09-03 (`ep-` now means corpus-specific), so the box and the repo
+  disagree by design until this deploy lands. `deploy-units` installs the new name; the old unit
+  must be `disable --now`d in the same window, or two units will contend for `:8082`.
+- Its `ExecStart` is `/home/filip/ep-rag-mcp/ep-rag-mcp` — a flat directory holding a hand-copied
   POC binary. Almost certainly copied there *because* `target/release` is unsafe to point a unit
   at, which is the same conclusion `build-rag` reaches properly.
 - `llama-server.service` points its `WorkingDirectory` at the non-git `~/local_coding_harness`.

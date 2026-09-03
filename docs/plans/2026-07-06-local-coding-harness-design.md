@@ -15,13 +15,13 @@ open-weights models — no code or prompts leaving the network. Inspired by:
 
 ## Hardware (remote box: `weebeastie`, 192.168.1.22)
 
-| Component | Spec | Implication |
-|-----------|------|-------------|
-| GPU | GTX 1050 Ti, **4 GB VRAM**, Pascal | Marginal; offload only a few layers. Not the engine. |
-| CPU | i9-10850K, 10c / 20t | The actual inference engine. |
-| RAM | 62 GB (~58 free) | The real model budget: ~30–45 GB on-disk models with headroom. |
-| Disk | 661 GB free | Plenty for weights. |
-| OS | Linux Mint 22.1 (kernel 6.8) | — |
+| Component | Spec                               | Implication                                                    |
+|-----------|------------------------------------|----------------------------------------------------------------|
+| GPU       | GTX 1050 Ti, **4 GB VRAM**, Pascal | Marginal; offload only a few layers. Not the engine.           |
+| CPU       | i9-10850K, 10c / 20t               | The actual inference engine.                                   |
+| RAM       | 62 GB (~58 free)                   | The real model budget: ~30–45 GB on-disk models with headroom. |
+| Disk      | 661 GB free                        | Plenty for weights.                                            |
+| OS        | Linux Mint 22.1 (kernel 6.8)       | —                                                              |
 
 **Consequence:** 355B-class models (GLM-4.6 / GLM-5.2) and dense 70B are out of reach.
 Token generation is **memory-bandwidth-bound** (~45 GB/s dual-channel DDR4), so a small
@@ -29,13 +29,13 @@ Token generation is **memory-bandwidth-bound** (~45 GB/s dual-channel DDR4), so 
 
 ## Key decisions
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| Model | **Qwen3-Coder-30B-A3B-Instruct**, GGUF, **Q4_K_M** (~18–19 GB) | Coder-specialized MoE; ~3B active = fast on CPU; Q4_K_M is the bandwidth-friendly sweet spot. Confirm best-available build at setup. |
-| Serving | **`llama-server`** (llama.cpp) | Single static binary, no daemon, OpenAI `/v1` endpoint, full CPU/GPU tuning knobs; transparent (fits security posture). |
-| Harness | **Qwen-Code** | OpenAI-native (no Anthropic proxy shim), tuned for Qwen, lighter token appetite than Claude Code. |
-| Topology (now) | **Split** — model+server on remote, SSH tunnel to laptop `localhost:8080`, Qwen-Code + repos local | Heavy inference on strong box; edit where you work; port never on the LAN. |
-| Topology (later) | All-on-remote sandbox | Remote becomes a genuine agent sandbox, not the daily driver. |
+| Decision         | Choice                                                                                             | Rationale                                                                                                                            |
+|------------------|----------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------|
+| Model            | **Qwen3-Coder-30B-A3B-Instruct**, GGUF, **Q4_K_M** (~18–19 GB)                                     | Coder-specialized MoE; ~3B active = fast on CPU; Q4_K_M is the bandwidth-friendly sweet spot. Confirm best-available build at setup. |
+| Serving          | **`llama-server`** (llama.cpp)                                                                     | Single static binary, no daemon, OpenAI `/v1` endpoint, full CPU/GPU tuning knobs; transparent (fits security posture).              |
+| Harness          | **Qwen-Code**                                                                                      | OpenAI-native (no Anthropic proxy shim), tuned for Qwen, lighter token appetite than Claude Code.                                    |
+| Topology (now)   | **Split** — model+server on remote, SSH tunnel to laptop `localhost:8080`, Qwen-Code + repos local | Heavy inference on strong box; edit where you work; port never on the LAN.                                                           |
+| Topology (later) | All-on-remote sandbox                                                                              | Remote becomes a genuine agent sandbox, not the daily driver.                                                                        |
 
 Benchmarking is treated as a **repeatable** step for future hardware/software upgrades,
 not a gate on the initial build.
