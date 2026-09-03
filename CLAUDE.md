@@ -273,14 +273,6 @@ Running list of follow-ups (check off as done; newest at the bottom).
       **normalize whitespace** (pdf-extract emits `"four  months"`).
     - **Drill-2 substrate located:** `EMPL-PR-612058:1 ~ IMCO-PR-773060:1` at **cosine 1.000** —
       byte-identical draft-report preamble across two committees.
-  - **[ ] NEXT (handoff) — the two named debugging drills**, following the toy drill examples in the
-    prep doc (`~/CloudStation/TeXProjects/CVinterview_prep_aiinfra.org`) + Drill 0's pattern:
-    - **Drill 1 — embedding mismatch:** break the query recipe (drop prefix / wrong pooling), watch
-      **recall@k** collapse on a golden set; contract-stamp catches it; self-retrieval flags *encoder*
-      drift specifically.
-    - **Drill 2 — confidence-blind fusion:** the fusion switch (mean-pool vs `p_eta`-weighted) on a
-      query whose top-k pulls the cosine-1.000 boilerplate twin; dupes outvote gold; rerank/MMR/dedup
-      restore it, faithfulness moving in step.
   - **[~] Deploy — reshaped (2026-09-03):** the index snapshot-migration to weebeastie still
     stands, but the rest of Phase 4 is void: there is no `rag-server` to run as a unit and no
     second Open WebUI model to register. What runs there is `ep-rag-mcp` (`:8082`). Still open
@@ -297,6 +289,7 @@ Running list of follow-ups (check off as done; newest at the bottom).
     `make serve-mcp` (ep-rag-mcp: MCP tool + `/retrieve` + `/route` on `:8082`) · drills/notebook in Emacs
     (`llms_kernel`) or `uv run --project drills python drills/…`.
   - [ ] org documents (my knowledge db) — later, same pipeline.
+  - [ ] LLM papers db
 - [ ] Base model change. Hardware is too weak for coding specific model, a generalist geared
   towards working with text, translations, information retrieval (web search and RAG).
   - [ ] Evaluate qwen-family "ThinkingCap models" tweaked towards lower token consumption per task:
