@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
-use ep_rag_generate::client::GenClient;
-use ep_rag_generate::provenance::Manifest;
-use ep_rag_retrieve::{Hit, Retriever};
+use rag_generate::client::GenClient;
+use rag_generate::provenance::Manifest;
+use rag_retrieve::{Hit, Retriever};
 use crate::{context::grounded_context, route::Route, tree::Tree};
 
 pub struct Router {

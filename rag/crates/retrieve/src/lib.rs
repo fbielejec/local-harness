@@ -2,8 +2,8 @@
 //! The productization of `rag_query.org`'s `embed_query` + `search` blocks.
 
 use anyhow::{Context, Result};
-use ep_rag_core::EmbeddingContract;
-use ep_rag_embed::Embedder;
+use rag_core::EmbeddingContract;
+use rag_embed::Embedder;
 use qdrant_client::qdrant::{value::Kind, SearchPointsBuilder, Value as QValue};
 use qdrant_client::Qdrant;
 use serde::Serialize;

@@ -1,6 +1,6 @@
-use ep_rag_generate::prompt::{assemble, SYSTEM};
-use ep_rag_generate::provenance::Manifest;
-use ep_rag_retrieve::Hit;
+use rag_generate::prompt::{assemble, SYSTEM};
+use rag_generate::provenance::Manifest;
+use rag_retrieve::Hit;
 
 /// The single host-agnostic grounded-context block: discipline + labelled passages + Sources.
 /// This is what both the MCP `search` tool and `/retrieve` return, and what `/route` injects.

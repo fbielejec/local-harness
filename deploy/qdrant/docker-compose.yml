@@ -1,4 +1,4 @@
-# Local-dev Qdrant for the EP-RAG pipeline.
+# Local-dev Qdrant for the RAG pipeline (one collection per corpus).
 # Mirrors deploy/openwebui: pinned image, named volume, restart policy. On
 # weebeastie this same file serves the production index beside llama-server +
 # Open WebUI. Qdrant needs no config file to run.

@@ -24,10 +24,10 @@ tunnel-qdrant:
 	ssh -fN -L 16333:127.0.0.1:6333 -L 16334:127.0.0.1:6334 $(REMOTE)
 	@echo "Qdrant → http://localhost:16333/dashboard  ·  gRPC localhost:16334"
 
-.PHONY: tunnel-mcp # [client] SSH-forward the remote ep-rag-mcp to localhost:8082
+.PHONY: tunnel-mcp # [client] SSH-forward the remote rag-mcp to localhost:8082
 tunnel-mcp:
 	ssh -fN -L 8082:127.0.0.1:8082 $(REMOTE)
-	@echo "ep-rag-mcp → http://localhost:8082/route   (stop: make tunnel-stop  ·  or pkill -f 'ssh -fN -L 8082')"
+	@echo "rag-mcp → http://localhost:8082/route   (stop: make tunnel-stop  ·  or pkill -f 'ssh -fN -L 8082')"
 
 .PHONY: tunnels # [client] open both the llama-server and Qdrant SSH tunnels
 tunnels: tunnel-llama tunnel-qdrant tunnel-mcp

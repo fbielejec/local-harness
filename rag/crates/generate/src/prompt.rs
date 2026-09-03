@@ -1,6 +1,6 @@
 //! Grounded-prompt assembly + `<think>` stripping.
 
-use ep_rag_retrieve::Hit;
+use rag_retrieve::Hit;
 
 /// The grounding discipline — copied verbatim from rag_query.org block B.
 pub const SYSTEM: &str = "You are a research assistant for European Parliament committee documents. \
@@ -39,7 +39,7 @@ pub fn strip_think(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ep_rag_retrieve::Hit;
+    use rag_retrieve::Hit;
 
     fn hits() -> Vec<Hit> {
         vec![

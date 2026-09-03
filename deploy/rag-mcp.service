@@ -1,5 +1,5 @@
 [Unit]
-Description=EP-RAG MCP server (retrieval + /route) — grounded EP committee Q&A
+Description=RAG MCP server (retrieval + /route) — grounded Q&A over the indexed corpora
 After=network.target
 Wants=network.target
 
@@ -13,7 +13,7 @@ WorkingDirectory=/home/filip/<deployed-rag-path>
 Environment=QDRANT_URL=http://localhost:6334
 Environment=GEN_BASE_URL=http://localhost:8080/v1
 Environment=RAG_MCP_BIND_ADDR=127.0.0.1:8082
-ExecStart=/home/filip/<deployed-rag-path>/target/release/ep-rag-mcp
+ExecStart=/home/filip/<deployed-rag-path>/target/release/rag-mcp
 Restart=always
 RestartSec=3
 

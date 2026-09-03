@@ -1,7 +1,7 @@
 """
 title: EP RAG Router
 author: local_coding_harness
-description: On each user turn, ask ep-rag-mcp /route whether to ground in EP committee
+description: On each user turn, ask rag-mcp /route whether to ground in EP committee
              documents; if so, inject the retrieved+grounded context. Deterministic, no tool-calling.
 version: 0.1.0
 """

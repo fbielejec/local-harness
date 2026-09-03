@@ -246,17 +246,27 @@ Running list of follow-ups (check off as done; newest at the bottom).
   - **[x] Drill 0 — index health (2026-07-11):** `rag/drills/drill0_index_health.org`. Integrity +
     separation/anisotropy + near-dups + self-retrieval probe. Index healthy.
   - **[x] `retrieve`/`generate` Rust crates (2026-07-11):** productized the notebook into
-    workspace crates — `ep-rag-retrieve` (bge query-prefix embed → Qdrant gRPC top-k) and
-    `ep-rag-generate` (grounded `assemble`, `<think>` strip, serve-time provenance/Sources join,
+    workspace crates — `rag-retrieve` (bge query-prefix embed → Qdrant gRPC top-k) and
+    `rag-generate` (grounded `assemble`, `<think>` strip, serve-time provenance/Sources join,
     UTF-8-safe streaming + non-streaming llama-server client). These are the substrate
-    `ep-rag-mcp` is built on.
+    `rag-mcp` is built on.
   - **[x] `ep-rag-server` removed (2026-09-03):** an axum OpenAI-compatible RAG face on `:8081`
     (`/v1/models` + `/v1/chat/completions`, startup live-vs-stored contract assert, warm-on-boot,
     30 tests green). Built, reviewed, and **never deployed** — its one job was to be Open WebUI's
-    second model, and the `/route` filter against `ep-rag-mcp` shipped that instead. Keeping a
+    second model, and the `/route` filter against `rag-mcp` shipped that instead. Keeping a
     second, unexercised front door to the same index was the worse trade, so the crate and its
     unit file are deleted. Recoverable from git; the build plan stays in `docs/plans/` as record.
   - **Don't relearn (key decisions + findings):**
+    - **Naming: `rag-*` is generic, `ep-*` is corpus-specific** (renamed 2026-09-03, ahead of the
+      papers and org-docs corpora below). The pipeline crates — `rag-core`, `chunk`, `parse`,
+      `embed`, `retrieve`, `generate`, `ingest`, `index` — and the `rag-mcp` service know nothing
+      about the European Parliament, so they no longer say so. What *is* EP-specific keeps the
+      name and should: `ep-rag-fetch` (an ODP API client), the `ep_committee_docs` collection,
+      the `search_ep_committee_docs` MCP tool, and the `R_USE_EP_RAG` route. A second corpus adds
+      its own collection, tool and route beside them rather than renaming these. The routing tree
+      is already opaque JSON loaded from `TREE_PATH`, so the router itself needs no change.
+      Not yet parameterized: `COLLECTION` is a `const` in `index.rs` — that is the work the
+      second corpus will force, and it is deliberately deferred until there is one.
     - Embed = **candle** (pure Rust), NOT fastembed — its ONNX prebuilt needs glibc ≥2.38, this
       box is 2.35 (`__isoc23_*` link error). candle links cleanly, no C++.
     - bge-small uses **CLS pooling** (not mean); query gets the instruction prefix, passages don't.
@@ -275,18 +285,18 @@ Running list of follow-ups (check off as done; newest at the bottom).
       byte-identical draft-report preamble across two committees.
   - **[~] Deploy — reshaped (2026-09-03):** the index snapshot-migration to weebeastie still
     stands, but the rest of Phase 4 is void: there is no `rag-server` to run as a unit and no
-    second Open WebUI model to register. What runs there is `ep-rag-mcp` (`:8082`). Still open
+    second Open WebUI model to register. What runs there is `rag-mcp` (`:8082`). Still open
     from that plan: the eval harness (recall@k/MRR **vs** groundedness+citation-accuracy).
-  - **[x] Conditional/agentic retrieval — delivered by `ep-rag-mcp`:** the problem was
+  - **[x] Conditional/agentic retrieval — delivered by `rag-mcp`:** the problem was
     always-on RAG. RAG-*as-a-model* ran the retrieve loop **unconditionally** on every query with
     no relevance gate (by design: the index is anisotropic, so we "don't threshold raw cosine"),
     so off-topic questions still paid embed+search+~2k-token prefill before the grounding prompt
-    made the model answer "I don't know" — mitigated only by the model picker. `ep-rag-mcp` is
+    made the model answer "I don't know" — mitigated only by the model picker. `rag-mcp` is
     the router that closes this: `/route` tree-classifies each turn before retrieving, and the
     same service exposes retrieval as an MCP tool an agent calls only when it needs it — the
     design's "tool-calling later" evolution, arrived at.
   - **Run:** `cd rag && make pipeline` (qdrant-up → fetch → ingest → index) · `make parity` ·
-    `make serve-mcp` (ep-rag-mcp: MCP tool + `/retrieve` + `/route` on `:8082`) · drills/notebook in Emacs
+    `make serve-mcp` (rag-mcp: MCP tool + `/retrieve` + `/route` on `:8082`) · drills/notebook in Emacs
     (`llms_kernel`) or `uv run --project drills python drills/…`.
   - [ ] org documents (my knowledge db) — later, same pipeline.
   - [ ] LLM papers db

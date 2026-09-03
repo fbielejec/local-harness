@@ -1,4 +1,4 @@
-//! Shared types for the EP-RAG pipeline.
+//! Shared types for the RAG pipeline — corpus-agnostic.
 //!
 //! The [`EmbeddingContract`] is the cross-language anchor. The Rust ingestion
 //! builds the index under it; the Python drills MUST reproduce it exactly (same

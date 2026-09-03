@@ -90,7 +90,7 @@ rather than "service won't start".
 ### `build-rag`
 
 ```sh
-cargo install --path rag/crates/mcp --locked      # → ~/.cargo/bin/ep-rag-mcp
+cargo install --path rag/crates/mcp --locked      # → ~/.cargo/bin/rag-mcp
 ```
 
 `--locked` so a deploy builds the lockfile's versions rather than silently resolving newer ones.
@@ -112,7 +112,7 @@ paths — they are templates whether or not they are named that way. `deploy-uni
 from variables (user/home, llama.cpp prefix, model spec, ports, binary path) into
 `/etc/systemd/system/`, backing up any differing live file as `*.service.bak-<ts>`.
 
-`ExecStart` resolves to `/home/<user>/.cargo/bin/ep-rag-mcp` — an **absolute** path. Do not reach
+`ExecStart` resolves to `/home/<user>/.cargo/bin/rag-mcp` — an **absolute** path. Do not reach
 for systemd's `%h` specifier: in a system unit under `/etc/systemd/system/` it expands to *root's*
 home even with `User=` set.
 
@@ -128,7 +128,7 @@ when the running config already matches.
 
 On weebeastie the first `install-server` is a **reconciliation, not an install**:
 
-- `ep-rag-mcp` runs `/home/filip/ep-rag-mcp/ep-rag-mcp` — a flat directory holding a hand-copied
+- `rag-mcp` runs `/home/filip/rag-mcp/rag-mcp` — a flat directory holding a hand-copied
   POC binary. Almost certainly copied there *because* `target/release` is unsafe to point a unit
   at, which is the same conclusion `build-rag` reaches properly.
 - `llama-server.service` points its `WorkingDirectory` at the non-git `~/local_coding_harness`.
@@ -142,15 +142,15 @@ freshly-installed binary reads the same env as the POC one.
 `2026-07-12-ep-rag-mcp-design.md` §*Fate of the existing `rag-server`* left it at "retire it, or
 keep on ice". **Retired**, 2026-09-03. It was an OpenAI-compatible RAG face on `:8081`, built and
 reviewed (30 tests green) but never deployed end to end; its one purpose was to be Open WebUI's
-second model, and what shipped instead was the `/route` filter against `ep-rag-mcp` — the same
+second model, and what shipped instead was the `/route` filter against `rag-mcp` — the same
 goal through the service already running. Keeping a second, unexercised front door to one index
 was the worse trade.
 
 Deleted: `rag/crates/rag-server/`, `deploy/rag-server.service`, the `serve` Makefile target, and
 the live references in `README.md` and `CLAUDE.md`. The workspace resolves to 10 packages; the
 lockfile change was 22 deletions and no version drift. `docs/plans/2026-07-11-*` are kept
-untouched as the historical record. `ep-rag-retrieve` and `ep-rag-generate` are unaffected —
-`ep-rag-mcp` is built on them.
+untouched as the historical record. `rag-retrieve` and `rag-generate` are unaffected —
+`rag-mcp` is built on them.
 
 ## 5. The `setup-desktop` side
 
@@ -180,7 +180,7 @@ The test bed is a live server, so order matters:
 1. `build-rag` alone — writes only `~/.cargo/bin`, touches nothing live.
 2. `deploy-units` — then diff rendered units against live ones and confirm `systemctl is-active`
    is **unchanged** for both services. This proves a deploy is inert.
-3. `restart-server` deliberately; watch `ep-rag-mcp` come back on `~/.cargo/bin` instead of the
+3. `restart-server` deliberately; watch `rag-mcp` come back on `~/.cargo/bin` instead of the
    POC path. Confirm `/route` still answers and the qwen MCP tool still resolves.
 4. Re-run `install-server` end to end — every tier must report skip.
 5. `install-client` twice on the laptop; the second pass changes nothing and re-downloads nothing.

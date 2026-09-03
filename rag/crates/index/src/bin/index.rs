@@ -6,9 +6,9 @@
 //! overwrites in place. Config via env (QDRANT_URL) — one code path, two deploys.
 
 use anyhow::{Context, Result};
-use ep_rag_chunk::Chunk;
-use ep_rag_embed::Embedder;
-use ep_rag_index::{chunk_payload, point_id};
+use rag_chunk::Chunk;
+use rag_embed::Embedder;
+use rag_index::{chunk_payload, point_id};
 use qdrant_client::qdrant::{
     CreateCollectionBuilder, Distance, PointStruct, UpsertPointsBuilder, VectorParamsBuilder,
 };
@@ -27,7 +27,7 @@ async fn main() -> Result<()> {
     // 1. load chunks (Chunk is Deserialize now)
     let path = Path::new("data/chunks.jsonl");
     let raw = fs::read_to_string(path).with_context(|| {
-        format!("missing {} — run: cargo run -p ep-rag-ingest --bin ingest", path.display())
+        format!("missing {} — run: cargo run -p rag-ingest --bin ingest", path.display())
     })?;
     let chunks: Vec<Chunk> = raw
         .lines()

@@ -1,4 +1,4 @@
-# EP-RAG — maximal-Rust pipeline (cargo workspace).
+# RAG — maximal-Rust pipeline (cargo workspace). Corpus-specific crates carry an ep- prefix.
 # Crates are added per brick; deps are pinned centrally here (research 2026-07-10).
 [workspace]
 resolver = "2"
@@ -13,7 +13,7 @@ license = "MIT"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1"
-# HTTP service (ep-rag-mcp) + streaming client to llama-server.
+# HTTP service (rag-mcp) + streaming client to llama-server.
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 axum = "0.7"
 reqwest = { version = "0.12", features = ["json", "stream"] }

@@ -1,5 +1,5 @@
 [package]
-name = "ep-rag-retrieve"
+name = "rag-retrieve"
 version.workspace = true
 edition.workspace = true
 
@@ -7,7 +7,7 @@ edition.workspace = true
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-ep-rag-core = { path = "../core" }
-ep-rag-embed = { path = "../embed" }
+rag-core = { path = "../core" }
+rag-embed = { path = "../embed" }
 qdrant-client = { workspace = true }
 tokio = { workspace = true }

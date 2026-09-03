@@ -10,8 +10,8 @@
 //!
 //! The live Qdrant work (collection create + batched upsert) is the bin.
 
-use ep_rag_chunk::Chunk;
-use ep_rag_core::EmbeddingContract;
+use rag_chunk::Chunk;
+use rag_core::EmbeddingContract;
 use serde_json::Value;
 use std::collections::BTreeMap;
 use uuid::Uuid;

@@ -3,7 +3,7 @@
 //! The Python half (drills/parity_gate.py) embeds the same samples with
 //! sentence-transformers and compares cosine per string.
 use anyhow::Result;
-use ep_rag_embed::Embedder;
+use rag_embed::Embedder;
 use serde_json::{json, Map, Value};
 use std::fs;
 

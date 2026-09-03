@@ -1,5 +1,5 @@
 [package]
-name = "ep-rag-chunk"
+name = "rag-chunk"
 version.workspace = true
 edition.workspace = true
 

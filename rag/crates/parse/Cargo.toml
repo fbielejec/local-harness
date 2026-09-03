@@ -1,5 +1,5 @@
 [package]
-name = "ep-rag-parse"
+name = "rag-parse"
 version.workspace = true
 edition.workspace = true
 

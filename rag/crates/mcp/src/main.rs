@@ -1,4 +1,4 @@
-//! ep-rag-mcp: one loopback service, three faces — MCP `search` tool,
+//! rag-mcp: one loopback service, three faces — MCP `search` tool,
 //! POST /retrieve, POST /route (Mode-A tree-classify → retrieve). See
 //! docs/plans/2026-07-12-ep-rag-mcp-design.md.
 mod config;
@@ -12,8 +12,8 @@ use anyhow::{Context, Result};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{extract::State, routing::post, Json, Router as AxumRouter};
-use ep_rag_generate::{client::GenClient, provenance::Manifest};
-use ep_rag_retrieve::Retriever;
+use rag_generate::{client::GenClient, provenance::Manifest};
+use rag_retrieve::Retriever;
 use rmcp::transport::streamable_http_server::{
     session::local::LocalSessionManager, StreamableHttpService,
 };
@@ -26,7 +26,7 @@ type Shared = Arc<Router>;
 #[tokio::main]
 async fn main() -> Result<()> {
     let cfg = config::Config::from_env();
-    eprintln!("ep-rag-mcp config: {cfg:?}");
+    eprintln!("rag-mcp config: {cfg:?}");
 
     // Fail-fast on bad config paths BEFORE the slow network/warm path.
     let tree = tree::Tree::load(&cfg.tree_path).context("load tree")?;
@@ -78,7 +78,7 @@ async fn main() -> Result<()> {
     let listener = tokio::net::TcpListener::bind(&cfg.bind_addr)
         .await
         .with_context(|| format!("bind {}", cfg.bind_addr))?;
-    eprintln!("ep-rag-mcp listening on {}", cfg.bind_addr);
+    eprintln!("rag-mcp listening on {}", cfg.bind_addr);
     axum::serve(listener, app).await?;
     Ok(())
 }

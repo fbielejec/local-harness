@@ -4,8 +4,8 @@
 //! embed + upsert-to-Qdrant with the contract-stamped payload, is the DRILL-1
 //! surface and is done in tomorrow's hand-holding session.
 use anyhow::{Context, Result};
-use ep_rag_chunk::{Chunk, Chunker};
-use ep_rag_parse::extract_text;
+use rag_chunk::{Chunk, Chunker};
+use rag_parse::extract_text;
 use serde::Deserialize;
 use std::fs;
 use std::path::Path;

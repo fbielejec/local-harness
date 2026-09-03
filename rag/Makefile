@@ -1,4 +1,5 @@
-# EP-RAG — ingestion pipeline commands. Run from rag/ (the cargo workspace root).
+# RAG — ingestion pipeline commands. Run from rag/ (the cargo workspace root).
+# Every step is corpus-agnostic except `fetch`, which is the EP Open Data Portal client.
 # One target per pipeline step (in order), the two acceptance gates, and
 # `make pipeline` to run the whole chain. Bare `make` prints the target list.
 #
@@ -40,17 +41,17 @@ fetch: ## 1. download EN PDFs + manifest.jsonl   (LIMIT=2 → 2 docs/type; empty
 	$(CARGO_RUN) -p ep-rag-fetch --bin fetch -- $(LIMIT)
 
 ingest: ## 2. parse + chunk every manifest doc → data/chunks.jsonl
-	$(CARGO_RUN) -p ep-rag-ingest --bin ingest
+	$(CARGO_RUN) -p rag-ingest --bin ingest
 
 index: ## 3. embed chunks + upsert to Qdrant with the contract-stamped payload (Drill-1 surface)
-	$(CARGO_RUN) -p ep-rag-index --bin index
+	$(CARGO_RUN) -p rag-index --bin index
 
 # --- gates / verification ---------------------------------------------------
 parse-gate: ## pdf-extract vs pymupdf parity gate
-	$(CARGO_RUN) -p ep-rag-parse --bin parse-gate
+	$(CARGO_RUN) -p rag-parse --bin parse-gate
 
 embed-gate: ## candle embed gate → data/parity/rust.json
-	$(CARGO_RUN) -p ep-rag-embed --bin embed-gate
+	$(CARGO_RUN) -p rag-embed --bin embed-gate
 
 parity: embed-gate ## cross-language embed parity: candle vs sentence-transformers
 	uv run --project drills python drills/parity_gate.py
@@ -59,8 +60,8 @@ parity: embed-gate ## cross-language embed parity: candle vs sentence-transforme
 pipeline: qdrant-up fetch ingest index ## run the whole ingestion pipeline end to end
 	@echo "pipeline complete → Qdrant collection populated"
 
-serve-mcp: ## run ep-rag-mcp (retrieval + /route + MCP tool) on loopback :8082
-	$(CARGO_RUN) -p ep-rag-mcp
+serve-mcp: ## run rag-mcp (retrieval + /route + MCP tool) on loopback :8082
+	$(CARGO_RUN) -p rag-mcp
 
 # --- live smoke checks (are the running services answering?) -----------------
 # Robust to the single --parallel 1 slot being busy: a timeout/empty body prints a
@@ -76,8 +77,8 @@ llama-status: ## smoke llama-server (:8080): model id + a real generation (expec
 	  | python3 -c 'import sys,json;print("   reply:",repr(json.load(sys.stdin)["choices"][0]["message"]["content"].strip()))' 2>/dev/null \
 	  || { echo "   ERROR: no generation within 180s (single --parallel 1 slot busy, or cold prefill)"; exit 1; }
 
-mcp-status: ## smoke ep-rag-mcp (:8082): classify + ground a canned query via /route
+mcp-status: ## smoke rag-mcp (:8082): classify + ground a canned query via /route
 	@curl -fs --max-time 180 http://localhost:8082/route -H 'Content-Type: application/json' \
 	  -d '{"message":"What is the deadline under the Youth Guarantee for a young person to receive an offer?"}' \
 	  | python3 -c 'import sys,json;d=json.load(sys.stdin);print("   route=%s  should_ground=%s  ctx_chars=%d"%(d["route"],d["should_ground"],len(d.get("context") or "")))' 2>/dev/null \
-	  || { echo "   ERROR: no /route response within 180s (ep-rag-mcp, llama-server, or Qdrant down/busy)"; exit 1; }
+	  || { echo "   ERROR: no /route response within 180s (rag-mcp, llama-server, or Qdrant down/busy)"; exit 1; }

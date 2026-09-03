@@ -812,41 +812,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ep-rag-chunk"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "hf-hub",
- "regex",
- "serde",
- "serde_json",
- "text-splitter",
- "tokenizers",
-]
-
-[[package]]
-name = "ep-rag-core"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "ep-rag-embed"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "candle-core",
- "candle-nn",
- "candle-transformers",
- "ep-rag-core",
- "hf-hub",
- "serde_json",
- "tokenizers",
-]
-
-[[package]]
 name = "ep-rag-fetch"
 version = "0.1.0"
 dependencies = [
@@ -854,82 +819,6 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
-]
-
-[[package]]
-name = "ep-rag-generate"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "ep-rag-retrieve",
- "futures",
- "reqwest",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "ep-rag-index"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "ep-rag-chunk",
- "ep-rag-core",
- "ep-rag-embed",
- "qdrant-client",
- "serde_json",
- "tokio",
- "uuid",
-]
-
-[[package]]
-name = "ep-rag-ingest"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "ep-rag-chunk",
- "ep-rag-parse",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "ep-rag-mcp"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum 0.8.9",
- "ep-rag-core",
- "ep-rag-generate",
- "ep-rag-retrieve",
- "rmcp",
- "schemars",
- "serde",
- "serde_json",
- "tokio",
- "tower 0.5.3",
-]
-
-[[package]]
-name = "ep-rag-parse"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "pdf-extract",
-]
-
-[[package]]
-name = "ep-rag-retrieve"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "ep-rag-core",
- "ep-rag-embed",
- "qdrant-client",
- "serde",
- "serde_json",
- "tokio",
 ]
 
 [[package]]
@@ -2418,6 +2307,117 @@ name = "r-efi"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf"
+
+[[package]]
+name = "rag-chunk"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hf-hub",
+ "regex",
+ "serde",
+ "serde_json",
+ "text-splitter",
+ "tokenizers",
+]
+
+[[package]]
+name = "rag-core"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "rag-embed"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "candle-core",
+ "candle-nn",
+ "candle-transformers",
+ "hf-hub",
+ "rag-core",
+ "serde_json",
+ "tokenizers",
+]
+
+[[package]]
+name = "rag-generate"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "rag-retrieve",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "rag-index"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "qdrant-client",
+ "rag-chunk",
+ "rag-core",
+ "rag-embed",
+ "serde_json",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
+name = "rag-ingest"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "rag-chunk",
+ "rag-parse",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "rag-mcp"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum 0.8.9",
+ "rag-core",
+ "rag-generate",
+ "rag-retrieve",
+ "rmcp",
+ "schemars",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tower 0.5.3",
+]
+
+[[package]]
+name = "rag-parse"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "pdf-extract",
+]
+
+[[package]]
+name = "rag-retrieve"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "qdrant-client",
+ "rag-core",
+ "rag-embed",
+ "serde",
+ "serde_json",
+ "tokio",
+]
 
 [[package]]
 name = "rand"

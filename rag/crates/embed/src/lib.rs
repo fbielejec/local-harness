@@ -14,7 +14,7 @@ use anyhow::{anyhow, Result};
 use candle_core::{DType, Device, IndexOp, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::bert::{BertModel, Config};
-use ep_rag_core::EmbeddingContract;
+use rag_core::EmbeddingContract;
 use hf_hub::{api::sync::Api, Repo, RepoType};
 use tokenizers::{PaddingParams, PaddingStrategy, Tokenizer};
 

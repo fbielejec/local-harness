@@ -1,4 +1,4 @@
-//! Env-driven configuration for ep-rag-mcp. `from_reader` takes a closure so the parser is
+//! Env-driven configuration for rag-mcp. `from_reader` takes a closure so the parser is
 //! unit-testable without touching the real process environment; `from_env` wires it to `std::env`.
 
 #[derive(Debug, Clone)]

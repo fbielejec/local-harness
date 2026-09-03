@@ -1,7 +1,7 @@
 //! PDF parse gate: run pure-Rust `pdf-extract` over every downloaded PDF, write
 //! the text to data/txt_rust/, and print per-doc stats so we can judge quality
 //! (char count, and whether numbered legislative structure survived extraction).
-use ep_rag_parse::extract_text;
+use rag_parse::extract_text;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Instant;

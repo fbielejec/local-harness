@@ -1,5 +1,5 @@
 [package]
-name = "ep-rag-generate"
+name = "rag-generate"
 version.workspace = true
 edition.workspace = true
 
@@ -7,7 +7,7 @@ edition.workspace = true
 anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-ep-rag-retrieve = { path = "../retrieve" }
+rag-retrieve = { path = "../retrieve" }
 reqwest = { workspace = true }
 futures = { workspace = true }
 tokio = { workspace = true }

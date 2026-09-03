@@ -1,14 +1,14 @@
 [package]
-name = "ep-rag-index"
+name = "rag-index"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
 serde_json = { workspace = true }
-ep-rag-core = { path = "../core" }
-ep-rag-chunk = { path = "../chunk" }
-ep-rag-embed = { path = "../embed" }
+rag-core = { path = "../core" }
+rag-chunk = { path = "../chunk" }
+rag-embed = { path = "../embed" }
 # Deterministic (v5) point ids from the citation_id -> idempotent re-index.
 uuid = { version = "1", features = ["v5"] }
 # Qdrant gRPC client (async) — the live index target.

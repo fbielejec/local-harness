@@ -1,7 +1,7 @@
 //! Serve-time provenance join: citation_id -> doc_id -> manifest pdf_url.
 
 use anyhow::Result;
-use ep_rag_retrieve::doc_id_of;
+use rag_retrieve::doc_id_of;
 use serde::Deserialize;
 use std::collections::HashMap;
 
