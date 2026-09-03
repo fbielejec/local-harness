@@ -63,11 +63,16 @@ rm -rf "$_sandbox"; unset _sandbox
 # rc=1 on the happy path of every re-run — exactly what install_file's doc
 # comment warns about in capitals.
 #
-# A stub qwen shadows the real one so the npm branch is never taken and the
-# assert measures this script rather than the machine's node install.
+# Stub qwen AND node, so the npm branch is never taken and the assert measures
+# this script rather than the machine it runs on. The node stub is what makes the
+# block hermetic: `make test-install` is run on the SERVER as part of a deploy,
+# and the server has no node at all — without it these five asserts fail there
+# for a reason that has nothing to do with the code under test. (jq stays a real
+# host dependency: stubbing it would gut the merge asserts above.)
 _e2e="$(mktemp -d)"
 mkdir -p "$_e2e/bin" "$_e2e/home"
-printf '#!/bin/sh\nexit 0\n' > "$_e2e/bin/qwen"; chmod +x "$_e2e/bin/qwen"
+printf '#!/bin/sh\nexit 0\n'      > "$_e2e/bin/qwen"; chmod +x "$_e2e/bin/qwen"
+printf '#!/bin/sh\necho v22.0.0\n' > "$_e2e/bin/node"; chmod +x "$_e2e/bin/node"
 
 assert_status 0 "client.sh runs clean on a fresh HOME" \
   env HOME="$_e2e/home" PATH="$_e2e/bin:$PATH" bash "$HERE/../client.sh"
