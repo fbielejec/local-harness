@@ -14,10 +14,10 @@ client machine (laptop)                    server machine (e.g. weebeastie, 192.
   your local git repos                              Qwen3-Coder-30B-A3B GGUF (IQ4_XS)
 ```
 
-| machine | role |
-|---|---|
+| machine    | role                                                                  |
+|------------|-----------------------------------------------------------------------|
 | **server** | the GPU box — builds & runs `llama-server`, bound to `127.0.0.1` only |
-| **client** | your dev laptop — SSH tunnel + Qwen-Code + your git repos |
+| **client** | your dev laptop — SSH tunnel + Qwen-Code + your git repos             |
 
 The server never listens on the LAN; it is reached exclusively through the SSH tunnel.
 
