@@ -36,7 +36,8 @@ substitute your own throughout.
 - **CUDA toolkit** (`nvcc`) ≥ 12.4 — install in step 1 if missing.
 - RAM ≥ ~20 GB (the MoE experts live in RAM) and ~16 GB free disk for the weights.
 
-**Client** (your laptop): SSH access to the server + **Node ≥ 20** with npm.
+**Client** (your laptop): SSH access to the server + **Node ≥ 20** with npm, and **`jq`**
+(`make install-client` merges into `~/.qwen/settings.json` rather than overwriting it).
 
 > Sizing intuition: generation here is **memory-bandwidth-bound on the CPU-resident experts**;
 > the small GPU only accelerates attention + the KV cache. See *Adapting to different hardware*.
@@ -191,13 +192,26 @@ DDNS, and the rest: *Remote access (WireGuard)* below.
 ## 4. [client] Qwen-Code harness
 
 ```bash
-node --version                          # need ≥ 20
-npm install -g @qwen-code/qwen-code
-qwen --version
+make install-client     # node ≥ 20 gate · qwen CLI · ~/.qwen/settings.json · smoke fixture
+```
 
-mkdir -p ~/qwen-scratch && cd ~/qwen-scratch
-printf 'The secret word is: artichoke.\n' > notes.txt
+Idempotent — a second run skips everything already in place and downloads nothing. It **merges**
+into an existing `~/.qwen/settings.json` rather than overwriting it, so anything you added by hand
+(extra MCP servers, permissions) survives; a `.bak-<timestamp>` is written only when the merge
+actually changes something. The three steps it performs, if you would rather do them by hand:
 
+| step | guard |
+|---|---|
+| `npm install -g @qwen-code/qwen-code` | skipped when `qwen --version` succeeds |
+| deploy `deploy/qwen/settings.json` — the `ep-rag` MCP server, telemetry and usage stats off | skipped when the merged result is already current |
+| seed `~/qwen-scratch/notes.txt` with the artichoke fixture | skipped when the fixture is already there |
+
+`make test-install` unit-tests the install scripts without installing anything.
+
+Then point the CLI at the tunnelled server and verify the whole loop:
+
+```bash
+cd ~/qwen-scratch
 export OPENAI_BASE_URL="http://localhost:8080/v1"
 export OPENAI_API_KEY="dummy"           # llama-server has no key; any value works
 export OPENAI_MODEL="unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:IQ4_XS"   # match /v1/models

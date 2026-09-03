@@ -94,6 +94,12 @@ nohup ~/Programs/llama.cpp/build/bin/llama-server \
 
 **Tunnel (laptop):** `ssh -fN -L 8080:127.0.0.1:8080 filip@192.168.1.22` (kill: `pkill -f "ssh -fN -L 8080"`)
 
+**Install the client (laptop):** `make install-client` — node gate, qwen CLI, `~/.qwen/settings.json`,
+smoke fixture. Idempotent, and it *merges* the settings rather than replacing them, so hand-added MCP
+servers survive. `make test-install` unit-tests the install scripts without installing anything.
+Scripts live in `deploy/install/`; the server half (`make install-server`) is designed but **not yet
+built** — see `docs/plans/2026-09-03-install-targets-plan.md`.
+
 **Run the harness (laptop):**
 ```bash
 cd ~/qwen-scratch

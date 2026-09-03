@@ -624,6 +624,41 @@ git commit -m "feat(install): make install-client"
 
 ---
 
+## Live-machine risks — read before Task 8
+
+Tasks 5–8 run against a server that is **currently serving traffic**. These are risks to the machine,
+distinct from code quality, carried out of the Tasks 1–4 reviews.
+
+1. **`install_file` is not atomic.** It backs up, then `install`s over the destination in place. A
+   `die` between the two leaves a truncated unit plus a `.bak-<ts>` and needs manual recovery.
+   Before Task 8 writes to `/etc/systemd/system`, change it to install to a temp file in the same
+   directory and `mv` into place — replacement then cannot be observed half-done. (Reassuring but
+   currently true only by luck: `foo.service.bak-<ts>` does not end in `.service`, so systemd will
+   not load the backups. State that in a comment rather than relying on it.)
+
+2. **Partial application in `deploy-units`' loop.** If a `die` fires midway, the box has some new
+   unit files on disk and every old process still running — and an unrelated reboot weeks later
+   applies half a configuration. **Render and validate every unit first, then write, then a single
+   `daemon-reload`.** Do not interleave render and write per unit.
+
+3. **The `rag-mcp` / `ep-rag-mcp` collision is a Task 8 problem, not a Task 12 one.** The live unit is
+   `ep-rag-mcp.service` (active, `ExecStart=/home/filip/ep-rag-mcp/ep-rag-mcp`); the repo asset is now
+   `rag-mcp.service`. Installing the latter without retiring the former leaves two units contending
+   for `:8082`. The cutover is sequenced in Task 12, but the *file* arrives in Task 8 — make sure
+   nothing enables it until the old unit is `disable --now`d.
+
+4. **No dry run.** There is no way to see what a run would change before it changes it, and backups
+   accumulate as timestamped siblings under `/etc/systemd/system`. A `DRY_RUN=1` short-circuit in
+   `install_file` is cheap and would make the first server-side run inspectable — worth more than any
+   test here, because the target is live.
+
+5. **The suite is not hermetic.** The Task 4 e2e asserts stub `qwen` but use the host's `node` and
+   `jq`. Fine on these two machines; it would fail for environmental reasons in CI.
+
+**The theme across every defect found in Tasks 1–4: a guard checking the wrong property** —
+green-when-aborted, present-when-truncated, exists-when-fit, 0644-when-preserve. That pattern is
+about to meet a 16 GiB download and a live systemd target.
+
 ## Task 5: `build-llama`
 
 **Files:** Create `deploy/install/build-llama.sh`; modify `Makefile`.
@@ -639,7 +674,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; . "$SCRIPT_DIR/lib.s
 LLAMA_DIR="${LLAMA_DIR:-$HOME/Programs/llama.cpp}"
 BIN="$LLAMA_DIR/build/bin/llama-server"
 
-[ -x "$BIN" ] && [ -z "${FORCE:-}" ] && { skip "llama-server already built at $BIN"; exit 0; }
+# `-x` proves the file bit, not that it runs — a half-finished build leaves an
+# executable that dies on a missing shared library. Ask it, as client.sh asks qwen.
+if [ -z "${FORCE:-}" ] && [ -x "$BIN" ] && "$BIN" --version >/dev/null 2>&1; then
+  skip "llama-server already built at $BIN"; exit 0
+fi
 
 command -v nvcc >/dev/null 2>&1 || die "nvcc not found. Install the CUDA toolkit (>= 12.4) — see README §1. This script will not install a 3 GB toolkit for you."
 
@@ -705,7 +744,14 @@ LLAMA_DIR="${LLAMA_DIR:-$HOME/Programs/llama.cpp}"
 CACHE_KEY="models--$(printf '%s' "${MODEL%%:*}" | tr '/' '-')"
 
 mkdir -p "$LLAMA_CACHE"
-if [ -d "$LLAMA_CACHE/$CACHE_KEY" ] && [ -z "${FORCE:-}" ]; then
+# FITNESS, not existence. An interrupted 16 GiB fetch creates this directory
+# immediately and leaves partial/.incomplete blobs behind; a bare [ -d ] then skips
+# forever and llama-server fails to load a truncated GGUF. Same defect class as the
+# 0-byte notes.txt found in Task 4, on the artifact where interruption is likeliest.
+if [ -z "${FORCE:-}" ] \
+   && [ -d "$LLAMA_CACHE/$CACHE_KEY" ] \
+   && ! find "$LLAMA_CACHE/$CACHE_KEY" -name '*.incomplete' -print -quit | grep -q . \
+   && find "$LLAMA_CACHE/$CACHE_KEY" -name '*.gguf' -size +1G -print -quit | grep -q .; then
   skip "model present ($CACHE_KEY)"; exit 0
 fi
 log "pulling $MODEL into $LLAMA_CACHE (~16 GiB, resumable)"
