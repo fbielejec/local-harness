@@ -97,3 +97,15 @@ test-install:
 .PHONY: install-client # [client] qwen CLI, ~/.qwen/settings.json, smoke fixture
 install-client:
 	bash deploy/install/client.sh
+
+.PHONY: build-llama # [server] build llama.cpp with CUDA (auto-detects GPU arch)
+build-llama:
+	bash deploy/install/build-llama.sh
+
+.PHONY: fetch-model # [server] pull the GGUF into $LLAMA_CACHE (~16 GiB; skipped when present)
+fetch-model:
+	bash deploy/install/fetch-model.sh
+
+.PHONY: build-rag # [server] cargo install rag-mcp into ~/.cargo/bin (--locked)
+build-rag:
+	bash deploy/install/build-rag.sh
