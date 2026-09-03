@@ -151,6 +151,25 @@ docker compose pull && docker compose up -d   # update after bumping the pinned 
 
 ## Key findings so far (don't relearn these)
 
+- **`rag-mcp` reads `data/route_tree.json` AND `data/manifest.jsonl` before it binds a port,**
+  relative to its `WorkingDirectory`. Only the route tree used to be tracked, so when the
+  2026-09-03 deploy moved `WorkingDirectory` from the hand-assembled `~/ep-rag-mcp/` to the
+  clone, it crash-looped 60 times at `RestartSec=3`. Both files are tracked now, and
+  `deploy-units` checks for them before it writes anything. Note what did NOT catch it: the
+  render was correct, every placeholder substituted, and `systemd-analyze verify` passed —
+  it checks directives, not what the program goes on to read.
+- **`rag-mcp` parses no arguments.** `rag-mcp --help` does not print usage; it BOOTS THE
+  SERVICE — loads the tree, dials Qdrant, binds `127.0.0.1:8082`. Never use it as a liveness
+  probe: on a healthy box it fails because the live unit holds the port, and on an idle one it
+  starts a second server. `build-rag` guards on `-x` alone for exactly this reason.
+- **`deploy/openwebui/.env` is gitignored,** so it exists only on the machine that made it. A
+  fresh clone cannot bring that stack up (`WEBUI_SECRET_KEY` missing). `deploy-units` warns and
+  carries on rather than failing a deploy whose units installed fine.
+- **The Hugging Face cache uses a DOUBLE dash** for the org separator:
+  `unsloth/Qwen3-…` → `models--unsloth--Qwen3-…`. And the `.gguf` under `snapshots/` is a
+  SYMLINK into `blobs/`, so `find` without `-L` cannot see its size — a guard written either
+  way silently re-downloads 16 GiB.
+
 - **`--parallel 1` is essential.** With multiple slots each agent turn lands on a cold slot
   and re-prefills the entire ~16k Qwen-Code system prompt. One slot keeps the KV cache warm
   (`sim ~0.997`), so follow-up turns (and even new `qwen` sessions) prefill only new tokens.
