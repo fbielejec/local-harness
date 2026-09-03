@@ -1,4 +1,7 @@
 {
+  "ui": {
+    "autoModeAcknowledged": true
+  },
   "privacy": {
     "usageStatisticsEnabled": false
   },

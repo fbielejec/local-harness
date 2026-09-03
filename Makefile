@@ -109,3 +109,19 @@ fetch-model:
 .PHONY: build-rag # [server] cargo install rag-mcp into ~/.cargo/bin (--locked)
 build-rag:
 	bash deploy/install/build-rag.sh
+
+.PHONY: deploy-units # [server] render+install systemd units and compose stacks (never restarts)
+deploy-units:
+	bash deploy/install/deploy-units.sh
+
+.PHONY: restart-server # [server] restart llama-server + rag-mcp (drops the warm KV cache)
+restart-server:
+	bash deploy/install/restart-server.sh
+
+.PHONY: install-server # [server] build llama.cpp, fetch the model, build+install rag-mcp, deploy units
+install-server: build-llama fetch-model build-rag deploy-units
+	@echo "install-server complete. Nothing was restarted — 'make restart-server' when ready."
+
+.PHONY: install-tools # [server] put the pipeline binaries (ingest, index, parse, embed, fetch) on PATH
+install-tools:
+	bash deploy/install/build-tools.sh
