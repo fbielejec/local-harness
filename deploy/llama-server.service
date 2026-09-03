@@ -5,11 +5,11 @@ Wants=network.target
 
 [Service]
 Type=simple
-User=filip
-Group=filip
-WorkingDirectory=/home/filip/Programs/llama.cpp/build/bin
-ExecStart=/home/filip/Programs/llama.cpp/build/bin/llama-server \
-  --model /home/filip/models/models--unsloth--Qwen3-Coder-30B-A3B-Instruct-GGUF/snapshots/b17cb02dd882d5b6ab62fc777ad2995f19668350/Qwen3-Coder-30B-A3B-Instruct-IQ4_XS.gguf \
+User=@USER_NAME@
+Group=@GROUP_NAME@
+WorkingDirectory=@LLAMA_DIR@/build/bin
+ExecStart=@LLAMA_DIR@/build/bin/llama-server \
+  --model @MODEL_PATH@ \
   --host 127.0.0.1 --port 8080 \
   --threads 10 --parallel 1 --ctx-size 32768 \
   --n-gpu-layers 99 --cpu-moe \

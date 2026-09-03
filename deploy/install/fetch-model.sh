@@ -13,14 +13,8 @@ MODEL="${MODEL:-unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:IQ4_XS}"
 LLAMA_CACHE="${LLAMA_CACHE:-$HOME/models}"
 LLAMA_DIR="${LLAMA_DIR:-$HOME/Programs/llama.cpp}"
 
-# The Hugging Face cache replaces `/` with a DOUBLE dash, not a single one:
-# unsloth/Qwen3-… -> models--unsloth--Qwen3-…  (verified on weebeastie).
-# `tr '/' '-'` yields models--unsloth-Qwen3-…, which matches nothing, so the guard
-# below would never fire and every run would re-pull 16 GiB.
-hf_cache_key() { # repo-with-slashes -> models--repo--with--dashes
-  printf 'models--%s\n' "$(printf '%s' "${1%%:*}" | sed 's|/|--|g')"
-}
-
+# hf_cache_key lives in lib.sh: deploy-units.sh needs the same mapping to find
+# the GGUF it writes into the llama-server unit.
 # FITNESS, not existence. An interrupted 16 GiB fetch creates this directory
 # immediately and leaves partial blobs behind; a bare [ -d ] then skips forever and
 # llama-server fails to load a truncated GGUF. Same defect class as the 0-byte

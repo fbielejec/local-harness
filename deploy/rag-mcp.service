@@ -5,15 +5,18 @@ Wants=network.target
 
 [Service]
 Type=simple
-User=filip
-Group=filip
-# Deployed rag/ workspace root — so data/route_tree.json + data/manifest.jsonl resolve.
-# Replace <deployed-rag-path> with the real path on weebeastie at install time.
-WorkingDirectory=/home/filip/<deployed-rag-path>
+User=@USER_NAME@
+Group=@GROUP_NAME@
+# The deployed rag/ workspace root, so data/route_tree.json + data/manifest.jsonl
+# resolve. Rendered from the clone deploy-units.sh runs out of.
+WorkingDirectory=@RAG_WORKDIR@
 Environment=QDRANT_URL=http://localhost:6334
 Environment=GEN_BASE_URL=http://localhost:8080/v1
 Environment=RAG_MCP_BIND_ADDR=127.0.0.1:8082
-ExecStart=/home/filip/<deployed-rag-path>/target/release/rag-mcp
+# An ABSOLUTE path under ~/.cargo/bin, not target/release: `cargo clean` can
+# delete a binary a unit points at. Do NOT reach for systemd's %h specifier — in
+# a system unit it expands to ROOT's home even with User= set.
+ExecStart=@RAG_BIN@
 Restart=always
 RestartSec=3
 

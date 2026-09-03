@@ -30,6 +30,40 @@ detect_cuda_arch() {
   arch_from_compute_cap "$cap"
 }
 
+# The Hugging Face cache replaces `/` with a DOUBLE dash, not a single one:
+# unsloth/Qwen3-… -> models--unsloth--Qwen3-…  (verified on weebeastie). A single
+# dash matches nothing, which turns every "is the model present?" guard into a
+# 16 GiB re-download. Accepts the `repo:QUANT` spec form and drops the quant.
+hf_cache_key() { # org/repo[:QUANT] -> models--org--repo
+  printf 'models--%s\n' "$(printf '%s' "${1%%:*}" | sed 's|/|--|g')"
+}
+
+# Absolute path of the GGUF inside an HF cache directory — what a systemd
+# ExecStart needs, since llama-server is given --model, not -hf, in the unit.
+#
+# `find -L`: the weights live in blobs/ under a hash name and snapshots/ holds a
+# SYMLINK with the real filename, so only the link matches *.gguf and only -L can
+# see what it points at.
+#
+# Ambiguity is fatal, not resolved by picking one. A cache holding two quants
+# would otherwise silently pin whichever sorted first, and the unit would load a
+# different model than the operator believes — visible only as changed output
+# quality. Dies naming both, and names the escape hatch.
+resolve_model_path() { # cache_dir [quant]
+  local dir="$1" quant="${2:-}" pattern matches n
+  [ -d "$dir" ] || die "model cache not found: $dir — run 'make fetch-model' first."
+  if [ -n "$quant" ]; then pattern="*${quant}*.gguf"; else pattern="*.gguf"; fi
+  matches="$(find -L "$dir" -name "$pattern" -size +1G 2>/dev/null | sort)"
+  n="$(printf '%s' "$matches" | grep -c . || true)"
+  [ "$n" -ge 1 ] || die "no .gguf matching '$pattern' under $dir — run 'make fetch-model' first."
+  if [ "$n" -gt 1 ]; then
+    die "ambiguous model in $dir — $n files match '$pattern':
+$matches
+Set MODEL_PATH=<one of these> explicitly."
+  fi
+  printf '%s\n' "$matches"
+}
+
 # Render @PLACEHOLDER@ from the environment. Fails if any placeholder survives —
 # the redacted units carry <deployed-rag-path>, and silently shipping an
 # unsubstituted unit is exactly the failure this must not allow.
@@ -102,6 +136,22 @@ render() {
 #     if install_file "$src" "$dest"; then systemctl daemon-reload; fi
 #   or  install_file "$src" "$dest" && changed=1
 #
+# ATOMIC. The destination is never written in place: the content lands on a temp
+# file NEXT TO it (same directory, therefore same filesystem) and is renamed over
+# it, so a die() between the backup and the write cannot leave a truncated unit
+# behind. This matters because the destinations are live systemd units — an
+# interrupted in-place install leaves systemd holding half a file plus a
+# .bak-<ts>, recoverable only by hand.
+#
+# The temp and backup siblings are named so systemd CANNOT load them: it only
+# reads files whose name ends in a unit suffix, and neither `.service.bak-<ts>`
+# nor `.service.tmp-<pid>-<ts>` does. That is a property to preserve, not a
+# coincidence to rely on quietly — do not rename them to `.service.new`.
+#
+# DRY_RUN=1 reports what would change and touches nothing, returning the same
+# signal it would return for real (0 = would write, 1 = already current). The
+# first run against /etc/systemd/system on a live box should always be a dry one.
+#
 # MODE: an EXISTING destination keeps the mode it already has; a NEW one is
 # created 0644. Not "always 0644" — that silently WIDENS a 0600 file, and this
 # helper installs systemd units, where one carrying an inline credential or
@@ -109,19 +159,34 @@ render() {
 # preserve" either: a fresh systemd unit must land 0644, and there is no
 # existing mode to preserve on first install.
 install_file() { # src_content_file dest [sudo]
-  local src="$1" dest="$2" use_sudo="${3:-}" ts mode
+  local src="$1" dest="$2" use_sudo="${3:-}" ts mode tmp
   ts="$(date +%Y%m%d-%H%M%S)"
   # Read the mode BEFORE anything writes to $dest. `|| echo 0644` also covers a
   # stat that cannot read the destination, so the fresh-install default is the
   # fallback for every uncertain case rather than an empty -m argument.
   mode=0644
   [ -e "$dest" ] && mode="$(stat -c '%a' "$dest" 2>/dev/null || echo 0644)"
-  if [ -f "$dest" ] && ! cmp -s "$src" "$dest"; then
-    ${use_sudo} cp -a "$dest" "${dest}.bak-${ts}" || die "backup failed: $dest"
-    log "backed up $dest -> ${dest}.bak-${ts}"
-  elif [ -f "$dest" ]; then
+
+  if [ -f "$dest" ] && cmp -s "$src" "$dest"; then
     skip "$dest already current"; return 1
   fi
-  ${use_sudo} install -m "$mode" "$src" "$dest" || die "install failed: $dest"
+
+  if [ -n "${DRY_RUN:-}" ]; then
+    if [ -f "$dest" ]; then log "DRY_RUN: would back up $dest and install over it (mode $mode)"
+    else                    log "DRY_RUN: would create $dest (mode $mode)"; fi
+    return 0
+  fi
+
+  if [ -f "$dest" ]; then
+    ${use_sudo} cp -a "$dest" "${dest}.bak-${ts}" || die "backup failed: $dest"
+    log "backed up $dest -> ${dest}.bak-${ts}"
+  fi
+
+  # Same directory as $dest, so the rename below is a same-filesystem rename(2)
+  # and therefore atomic. A temp under /tmp would make it a copy, reintroducing
+  # exactly the half-written window this exists to close.
+  tmp="${dest}.tmp-$$-${ts}"
+  ${use_sudo} install -m "$mode" "$src" "$tmp" || die "install failed: $tmp"
+  ${use_sudo} mv -f "$tmp" "$dest" || { ${use_sudo} rm -f "$tmp"; die "could not move $tmp into place as $dest"; }
   log "installed $dest"; return 0
 }

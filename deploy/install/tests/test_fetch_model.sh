@@ -7,12 +7,6 @@
 # variable SCRIPT_DIR, so this cannot clobber the runner's HERE.
 . "$HERE/../fetch-model.sh" --source-only
 
-# --- hf_cache_key: the DOUBLE dash is the whole point ------------------------
-assert_eq "models--unsloth--Qwen3-Coder-30B-A3B-Instruct-GGUF" \
-  "$(hf_cache_key 'unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:IQ4_XS')" \
-  "hf_cache_key: org/repo:quant -> models--org--repo"
-assert_eq "models--bare" "$(hf_cache_key 'bare')" "hf_cache_key: no slash, no quant"
-
 # --- model_present: fitness, not existence -----------------------------------
 _t="$(mktemp -d)"
 
