@@ -89,3 +89,11 @@ qwen:
 .PHONY: remote-qdrant-status # list remote Qdrant collections (is anything indexed yet?)
 remote-qdrant-status:
 	curl -s http://localhost:16333/collections | python3 -m json.tool
+
+.PHONY: test-install # [any] unit-test the install scripts (no install performed)
+test-install:
+	bash deploy/install/tests/run.sh
+
+.PHONY: install-client # [client] qwen CLI, ~/.qwen/settings.json, smoke fixture
+install-client:
+	bash deploy/install/client.sh
