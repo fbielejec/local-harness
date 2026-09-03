@@ -121,11 +121,25 @@ main() {
   done
 
   # ── Compose stacks. Idempotent, and a no-op when the running config matches. ─
+  #
+  # A stack failure WARNS, it does not abort. The units are what this target
+  # exists to install, and they are already on disk by now; taking the whole
+  # deploy down because a chat frontend could not start would be the wrong trade.
+  # The expected failure is concrete: deploy/openwebui/.env holds WEBUI_SECRET_KEY
+  # and is gitignored, so it is absent on every machine but the one that made it —
+  # which is exactly the second-machine case this repo keeps meeting.
+  local failed=""
   if command -v docker >/dev/null 2>&1; then
-    docker compose -f "$REPO/deploy/qdrant/docker-compose.yml" up -d
-    docker compose -f "$REPO/deploy/openwebui/docker-compose.yml" up -d
+    for stack in qdrant openwebui; do
+      docker compose -f "$REPO/deploy/$stack/docker-compose.yml" up -d || failed="$failed $stack"
+    done
   else
     warn "docker not found — skipping the qdrant and openwebui stacks"
+  fi
+  if [ -n "$failed" ]; then
+    warn "compose stack(s) did not come up:$failed"
+    warn "  The units above ARE installed. For openwebui the usual cause is a missing"
+    warn "  deploy/openwebui/.env — copy .env.example and set WEBUI_SECRET_KEY."
   fi
 
   if [ -n "$changed" ]; then
