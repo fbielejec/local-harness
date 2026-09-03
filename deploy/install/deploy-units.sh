@@ -25,6 +25,18 @@ MODEL="${MODEL:-unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:IQ4_XS}"
 # so an empty value means "no supersessions" rather than "give me the default").
 SUPERSEDES="${SUPERSEDES-rag-mcp:ep-rag-mcp}"
 
+# rag-mcp resolves data/route_tree.json and data/manifest.jsonl RELATIVE to its
+# WorkingDirectory, and loads both before it binds a port. systemd-analyze cannot
+# know that — it checks directives, not what the program reads — so a missing one
+# passes every gate here and then crash-loops on the box at RestartSec=3, which is
+# how this was actually found. Check it while a bad deploy is still preventable.
+rag_workdir_ok() { # workdir
+  local d="$1" f
+  for f in data/route_tree.json data/manifest.jsonl; do
+    [ -s "$d/$f" ] || { err "rag-mcp WorkingDirectory $d is missing $f"; return 1; }
+  done
+}
+
 superseded_by() { # unit -> the legacy unit name it replaces, or nothing
   local pair
   for pair in $SUPERSEDES; do
@@ -64,6 +76,12 @@ main() {
     content="$(render "$REPO/deploy/$u.service")" || die "render failed for $u"
     printf '%s\n' "$content" > "$tmp"
   done
+
+  case " $UNITS " in *" rag-mcp "*)
+    rag_workdir_ok "$RAG_WORKDIR" \
+      || die "nothing was installed. rag-mcp loads those at startup, relative to its WorkingDirectory — a unit pointing here would crash-loop. Re-run the ingest pipeline, or set RAG_WORKDIR= to the directory that has them."
+    ;;
+  esac
 
   # Named *.service in a temp dir precisely so systemd-analyze will parse them.
   # This catches a mistyped directive, and an ExecStart that does not exist,

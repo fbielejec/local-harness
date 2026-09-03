@@ -12,5 +12,9 @@ __pycache__/
 # Ingested corpus — fetched PDFs are reproducible, not source; keep them out of git
 # (glob the contents rather than the dir so a versioned config below can be re-included)
 data/*
-# ...except versioned config that IS source (loaded at startup), e.g. the route tree.
+# ...except versioned config that IS source (loaded at startup): rag-mcp reads BOTH
+# of these before it binds a port, so a clone without them cannot run the service.
+# manifest.jsonl was missed here until 2026-09-03, when the deployed unit's
+# WorkingDirectory moved to the clone and rag-mcp crash-looped 60 times on it.
 !data/route_tree.json
+!data/manifest.jsonl
