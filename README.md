@@ -44,39 +44,56 @@ substitute your own throughout.
 
 ## 1. [server] Build llama.cpp with CUDA
 
-If `nvcc` is missing, install the CUDA toolkit. This box is Ubuntu 24.04 → CUDA 12.6 (adjust the
-repo/version for your OS; you need ≥ 12.4 for gcc 13):
+```bash
+make build-llama        # skipped when llama-server already builds and runs
+```
+
+Auto-detects the GPU's compute capability from `nvidia-smi` and passes it as
+`CMAKE_CUDA_ARCHITECTURES` (6.1 Pascal → `61`, 7.5 Turing, 8.6 Ampere, 8.9 Ada, 9.0 Hopper).
+That value is the single most likely thing to get wrong on a new box, and it fails *after* a
+20-minute compile — override with `CUDA_ARCH=` only if the detection is wrong. `FORCE=1`
+rebuilds an existing tree; `LLAMA_DIR=` moves it off `~/Programs/llama.cpp`.
+
+The build itself is `-DGGML_CUDA=ON -DGGML_CUDA_FA_ALL_QUANTS=ON -DLLAMA_CURL=ON` —
+flash-attention for quantized KV, and `-hf` model pulls. ~15–25 min.
+
+**The CUDA toolkit is a precondition, not a step.** `make build-llama` fails pointing here if
+`nvcc` is missing rather than installing 3 GB unasked. This box is Ubuntu 24.04 → CUDA 12.6
+(adjust for your OS; ≥ 12.4 is needed for gcc 13):
 
 ```bash
 cd /tmp
 wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
 sudo dpkg -i cuda-keyring_1.1-1_all.deb
 sudo apt update && sudo apt install -y cuda-toolkit-12-6
-echo 'export PATH=/usr/local/cuda-12.6/bin:$PATH' >> ~/.bashrc
-echo 'export LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
-source ~/.bashrc && nvcc --version      # expect release ≥ 12.4
+nvcc --version      # expect release >= 12.4
 ```
 
-Build. **Set `CMAKE_CUDA_ARCHITECTURES` to your GPU's compute capability** (61 Pascal /
-75 Turing / 86 Ampere / 89 Ada / 90 Hopper):
+If `nvcc` is not on `PATH` afterwards, put it there durably — a `~/.bashrc.d/cuda.sh` snippet
+if you use `setup-desktop`, whose `setup-bash.sh` overwrites `~/.bashrc` wholesale and would
+eat lines appended to it:
 
-```bash
-mkdir -p ~/Programs && cd ~/Programs
-git clone https://github.com/ggml-org/llama.cpp && cd llama.cpp
-# GGML_CUDA_FA_ALL_QUANTS = flash-attn for quantized KV; LLAMA_CURL = -hf model pulls
-cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=61 \
-      -DGGML_CUDA_FA_ALL_QUANTS=ON -DLLAMA_CURL=ON
-cmake --build build --config Release -j"$(nproc)"      # ~15-25 min
-~/Programs/llama.cpp/build/bin/llama-server --version
+```sh
+export PATH=/usr/local/cuda-12.6/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda-12.6/lib64:$LD_LIBRARY_PATH
 ```
 
 ## 2. [server] Launch the model server (winning config)
 
-`-hf` downloads the GGUF (~16 GB) into `$LLAMA_CACHE` on first run. **IQ4_XS** is the
-quality-gated throughput winner here (Q4_K_M also works, ~5 % slower):
+```bash
+make fetch-model        # ~16 GiB into $LLAMA_CACHE; skipped when already there
+```
+
+Making the pull its own step is the point: it used to happen implicitly on the first
+`llama-server` start via `-hf`, so a first boot silently took as long as a download and looked
+like a hang. **IQ4_XS** is the quality-gated throughput winner here (Q4_K_M also works, ~5 %
+slower); `MODEL=` overrides, `LLAMA_CACHE=` moves the cache off `~/models`.
+
+In production the server runs under systemd (§2a). Launch it by hand only for benchmarking —
+stop the unit first, or the two contend for `:8080`:
 
 ```bash
-mkdir -p ~/models
+sudo systemctl stop llama-server
 export LLAMA_CACHE=$HOME/models
 nohup ~/Programs/llama.cpp/build/bin/llama-server \
   -hf unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:IQ4_XS \
@@ -113,10 +130,38 @@ curl -s http://127.0.0.1:8080/v1/chat/completions -H "Content-Type: application/
 
 ## 2a. [server] Run it as a systemd service (survives reboots)
 
-In production the winning config runs as a **system-level** service so it auto-starts on
-boot and restarts on crash. Unit file: `deploy/llama-server.service` (repo) →
-`/etc/systemd/system/llama-server.service` (server). It uses the local GGUF path instead of
-`-hf`, so boot needs no network. Install/cutover steps: `docs/plans/2026-07-08-systemd-llama-server.md`.
+In production both services run **system-level** so they auto-start on boot and restart on
+crash: `llama-server` and `rag-mcp` (§*EP-Committee RAG*).
+
+```bash
+make install-server     # build-llama + fetch-model + build-rag + deploy-units
+make restart-server     # the only step that takes downtime — never implicit
+```
+
+`deploy/*.service` are **templates**, rendered with this machine's user, paths and the resolved
+GGUF snapshot path — they cannot be copied into place as-is. `deploy-units` renders all of them,
+runs `systemd-analyze verify` on the results, and only then writes to `/etc/systemd/system`,
+backing up any differing live file as `*.service.bak-<ts>`. Every tier is separately runnable
+(`make build-rag`, `make deploy-units`) and skips when its work is already done.
+
+**A deploy is inert.** Writing a unit file changes nothing until a restart, so `install-server`
+installs, `daemon-reload`s and *reports* what changed — it never bounces a live service. Taking
+the downtime is `make restart-server`, which drops the warm KV cache (the next agent turn
+re-prefills the ~16k prompt, ~190 s). Preview a run that touches nothing with `DRY_RUN=1`:
+
+```bash
+DRY_RUN=1 make deploy-units
+```
+
+`install-tools` separately puts the pipeline binaries (`ingest`, `index`, `parse-gate`,
+`embed-gate`, `fetch`) on `PATH`. They are not services and `install-server` does not build them.
+
+> **`cargo` is not on the non-interactive `PATH`.** `ssh box 'make install-server'` runs a
+> non-interactive shell, `~/.bashrc` returns early at its `case $- in *i*` guard, and
+> `~/.cargo/bin` is absent. The install scripts resolve `cargo` explicitly (`$CARGO` → `PATH`
+> → `~/.cargo/bin/cargo`); anything else you run over `ssh` needs the same care.
+
+**Check if it's running** (no sudo):
 
 **Check if it's running** (no sudo):
 

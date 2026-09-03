@@ -97,8 +97,25 @@ nohup ~/Programs/llama.cpp/build/bin/llama-server \
 **Install the client (laptop):** `make install-client` — node gate, qwen CLI, `~/.qwen/settings.json`,
 smoke fixture. Idempotent, and it *merges* the settings rather than replacing them, so hand-added MCP
 servers survive. `make test-install` unit-tests the install scripts without installing anything.
-Scripts live in `deploy/install/`; the server half (`make install-server`) is designed but **not yet
-built** — see `docs/plans/2026-09-03-install-targets-plan.md`.
+Scripts live in `deploy/install/`.
+
+**Install the server (weebeastie):** `make install-server` — `build-llama` (CUDA arch auto-detected)
+→ `fetch-model` (the ~16 GiB pull, made explicit) → `build-rag` (`cargo install --locked` into
+`~/.cargo/bin/rag-mcp`) → `deploy-units` (render the unit templates, `systemd-analyze verify` them,
+install, `daemon-reload`). Every tier is separately runnable and skips when its work is done.
+
+⚠️ **A deploy is inert, on purpose.** `install-server` never restarts a live service — it reports
+which unit files changed. `make restart-server` is the only step that takes downtime, and it drops
+the warm KV cache (~190 s to re-prefill). `DRY_RUN=1 make deploy-units` previews without writing.
+
+⚠️ **`cargo` is NOT on the non-interactive `PATH`.** `ssh weebeastie 'make install-server'` runs a
+non-interactive shell, so `~/.bashrc` returns early at its `case $- in *i*` guard and `~/.cargo/bin`
+never gets added. The install scripts resolve it explicitly (`$CARGO` → `PATH` → `~/.cargo/bin/cargo`);
+anything else run over `ssh` needs the same treatment.
+
+⚠️ **`deploy/*.service` are templates, not copies.** They carry `@VAR@` placeholders and are rendered
+with this machine's user, paths and the *resolved* GGUF snapshot path. `render` refuses to emit a unit
+with a surviving placeholder, so a missing export fails at install time rather than at service start.
 
 **Run the harness (laptop):**
 ```bash

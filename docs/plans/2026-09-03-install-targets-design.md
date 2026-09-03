@@ -1,12 +1,12 @@
 # `make install-client` / `make install-server` — Design
 
 **Date:** 2026-09-03
-**Status:** **Partially implemented, 2026-09-03.** `make install-client` and `make test-install`
-are built, reviewed and running (47 asserts); the client half of §1 is done. `make install-server`
-and its four tiers (§2) are **not yet built** — Tasks 5–9 of the implementation plan. The
-`rag-server` retirement this depends on is done (crate, unit and live references deleted 2026-09-03),
-as is the `ep-rag-*` → `rag-*` rename of the generic crates. Implementation plan and the
-live-machine risk register: `docs/plans/2026-09-03-install-targets-plan.md`.
+**Status:** **Implemented, 2026-09-03.** `make install-client`, `make install-server` and its four
+tiers (`build-llama`, `fetch-model`, `build-rag`, `deploy-units`), plus `restart-server` and
+`install-tools`, are built and unit-tested (85 asserts, `make test-install`). The `rag-server`
+retirement this depended on is done (crate, unit and live references deleted 2026-09-03), as is the
+`ep-rag-*` → `rag-*` rename of the generic crates. Implementation plan and the live-machine risk
+register: `docs/plans/2026-09-03-install-targets-plan.md`.
 **Topic:** turn this repo's bring-up prose into two Makefile targets, so that `setup-desktop`
 can install either half of the harness without re-implementing — or drifting from — what
 README §1–§4 describe.
