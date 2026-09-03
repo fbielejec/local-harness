@@ -83,8 +83,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// 502 — an upstream (classify/retrieve) dependency failed. Mirrors
-/// `rag-server/src/handlers.rs`'s error envelope.
+/// 502 — an upstream (classify/retrieve) dependency failed.
 fn error_response(msg: &str) -> Response {
     status_error(StatusCode::BAD_GATEWAY, msg)
 }

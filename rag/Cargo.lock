@@ -142,8 +142,6 @@ dependencies = [
  "http",
  "http-body",
  "http-body-util",
- "hyper",
- "hyper-util",
  "itoa",
  "matchit 0.7.3",
  "memchr",
@@ -152,15 +150,10 @@ dependencies = [
  "pin-project-lite",
  "rustversion",
  "serde",
- "serde_json",
- "serde_path_to_error",
- "serde_urlencoded",
  "sync_wrapper",
- "tokio",
  "tower 0.5.3",
  "tower-layer",
  "tower-service",
- "tracing",
 ]
 
 [[package]]
@@ -214,7 +207,6 @@ dependencies = [
  "sync_wrapper",
  "tower-layer",
  "tower-service",
- "tracing",
 ]
 
 [[package]]
@@ -935,20 +927,6 @@ dependencies = [
  "ep-rag-core",
  "ep-rag-embed",
  "qdrant-client",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
-name = "ep-rag-server"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "axum 0.7.9",
- "ep-rag-generate",
- "ep-rag-retrieve",
- "futures",
  "serde",
  "serde_json",
  "tokio",

@@ -13,7 +13,7 @@ CARGO_RUN := cargo run --release
 
 .DEFAULT_GOAL := help
 .PHONY: help qdrant-up qdrant-down qdrant-logs qdrant-status \
-	fetch ingest index parse-gate embed-gate parity pipeline serve serve-mcp \
+	fetch ingest index parse-gate embed-gate parity pipeline serve-mcp \
 	llama-status mcp-status test
 
 help: ## list targets
@@ -58,9 +58,6 @@ parity: embed-gate ## cross-language embed parity: candle vs sentence-transforme
 # --- joint ------------------------------------------------------------------
 pipeline: qdrant-up fetch ingest index ## run the whole ingestion pipeline end to end
 	@echo "pipeline complete → Qdrant collection populated"
-
-serve: ## run rag-server (OpenAI-compatible RAG endpoint on :8081)
-	$(CARGO_RUN) -p ep-rag-server --bin rag-server
 
 serve-mcp: ## run ep-rag-mcp (retrieval + /route + MCP tool) on loopback :8082
 	$(CARGO_RUN) -p ep-rag-mcp

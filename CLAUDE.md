@@ -44,14 +44,14 @@ laptop (this machine)                         remote: weebeastie 192.168.1.22
 
 ## Stack / where things live
 
-| Thing | Location |
-|-------|----------|
-| llama.cpp (built, CUDA 12.6, sm_61) | remote `~/Programs/llama.cpp`, binaries in `build/bin/` |
-| Model weights (GGUF, via `-hf` cache) | remote `~/models/` (`export LLAMA_CACHE=$HOME/models`) |
-| Model | `unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:IQ4_XS` (~15.25 GiB, MoE 30B / ~3B active) — autoperf winner (2026-07-07); Q4_K_M was the prior default |
-| Server log | remote `~/llama-server.log` |
-| Qwen-Code scratch workspace | laptop `~/qwen-scratch` |
-| Chat frontend (Open WebUI, Docker) | remote `~/openwebui/` (compose + gitignored `.env`); UI at `http://192.168.1.22:3000`; config in `deploy/openwebui/` |
+| Thing                                 | Location                                                                                                                                           |
+|---------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|
+| llama.cpp (built, CUDA 12.6, sm_61)   | remote `~/Programs/llama.cpp`, binaries in `build/bin/`                                                                                            |
+| Model weights (GGUF, via `-hf` cache) | remote `~/models/` (`export LLAMA_CACHE=$HOME/models`)                                                                                             |
+| Model                                 | `unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF:IQ4_XS` (~15.25 GiB, MoE 30B / ~3B active) — autoperf winner (2026-07-07); Q4_K_M was the prior default |
+| Server log                            | remote `~/llama-server.log`                                                                                                                        |
+| Qwen-Code scratch workspace           | laptop `~/qwen-scratch`                                                                                                                            |
+| Chat frontend (Open WebUI, Docker)    | remote `~/openwebui/` (compose + gitignored `.env`); UI at `http://192.168.1.22:3000`; config in `deploy/openwebui/`                               |
 
 ## Operating the server
 
@@ -245,16 +245,17 @@ Running list of follow-ups (check off as done; newest at the bottom).
     is the **executable spec** for the Rust `retrieve`/`generate` crates.
   - **[x] Drill 0 — index health (2026-07-11):** `rag/drills/drill0_index_health.org`. Integrity +
     separation/anisotropy + near-dups + self-retrieval probe. Index healthy.
-  - **[x] `retrieve`/`generate`/`rag-server` Rust crates (2026-07-11):** productized the notebook
-    into three workspace crates — `ep-rag-retrieve` (bge query-prefix embed → Qdrant gRPC top-k),
+  - **[x] `retrieve`/`generate` Rust crates (2026-07-11):** productized the notebook into
+    workspace crates — `ep-rag-retrieve` (bge query-prefix embed → Qdrant gRPC top-k) and
     `ep-rag-generate` (grounded `assemble`, `<think>` strip, serve-time provenance/Sources join,
-    UTF-8-safe streaming + non-streaming llama-server client), `ep-rag-server` (axum,
-    OpenAI-compatible `/v1/models` + `/v1/chat/completions` streaming & not, **startup
-    live-vs-stored contract assert**, warm-on-boot, env `Config`). 30 unit tests green,
-    warning-free; per-unit spec+quality review + final holistic review passed. `make serve` runs it
-    on loopback `:8081`. **NOT yet deployed / run end-to-end** — the live path (Qdrant + llama-server)
-    is Phase 4 below. Plan: `docs/plans/2026-07-11-rag-server-implementation-plan.md`. On branch
-    `rag-server` (unmerged as of writing).
+    UTF-8-safe streaming + non-streaming llama-server client). These are the substrate
+    `ep-rag-mcp` is built on.
+  - **[x] `ep-rag-server` removed (2026-09-03):** an axum OpenAI-compatible RAG face on `:8081`
+    (`/v1/models` + `/v1/chat/completions`, startup live-vs-stored contract assert, warm-on-boot,
+    30 tests green). Built, reviewed, and **never deployed** — its one job was to be Open WebUI's
+    second model, and the `/route` filter against `ep-rag-mcp` shipped that instead. Keeping a
+    second, unexercised front door to the same index was the worse trade, so the crate and its
+    unit file are deleted. Recoverable from git; the build plan stays in `docs/plans/` as record.
   - **Don't relearn (key decisions + findings):**
     - Embed = **candle** (pure Rust), NOT fastembed — its ONNX prebuilt needs glibc ≥2.38, this
       box is 2.35 (`__isoc23_*` link error). candle links cleanly, no C++.
@@ -280,23 +281,20 @@ Running list of follow-ups (check off as done; newest at the bottom).
     - **Drill 2 — confidence-blind fusion:** the fusion switch (mean-pool vs `p_eta`-weighted) on a
       query whose top-k pulls the cosine-1.000 boilerplate twin; dupes outvote gold; rerank/MMR/dedup
       restore it, faithfulness moving in step.
-  - **[ ] Then — deploy (Phase 4 of the rag-server plan):** snapshot-migrate the index to
-    weebeastie (no re-embed; contract travels in the payload) · run `rag-server` there as a systemd
-    unit (loopback `:8081`, mirroring `llama-server`) · register it as Open WebUI's **second** model
-    ("EP Committees, grounded"), keeping `BYPASS_EMBEDDING_AND_RETRIEVAL=true`. Plus the eval harness
-    (recall@k/MRR **vs** groundedness+citation-accuracy). Steps: `docs/plans/2026-07-11-rag-server-implementation-plan.md`
-    §Phase 4 + `docs/plans/2026-07-11-openwebui-rag-integration-design.md`.
-  - **[ ] Later — conditional/agentic retrieval (avoid always-on RAG):** Option A is
-    RAG-*as-a-model* — `rag-server`'s `chat_completions` (`handlers.rs:21`) runs the retrieve loop
-    **unconditionally** on every query to the grounded model, with no relevance gate (by design: the
-    index is anisotropic, so we "don't threshold raw cosine"). Off-topic questions still pull 5 EP
-    chunks and pay embed+search+~2k-token prefill, then the grounding prompt makes the model reply
-    "I don't know". Mitigated today only by the model picker (bare "Qwen" for general chat vs "EP
-    Committees, grounded" for policy Qs). If we want ONE model that decides whether to retrieve, that's
-    a real change — a router/agentic-RAG (tool-calling: expose retrieval as a tool the model calls only
-    when needed, the design's "tool-calling later" evolution). Out of scope for the current plan.
+  - **[~] Deploy — reshaped (2026-09-03):** the index snapshot-migration to weebeastie still
+    stands, but the rest of Phase 4 is void: there is no `rag-server` to run as a unit and no
+    second Open WebUI model to register. What runs there is `ep-rag-mcp` (`:8082`). Still open
+    from that plan: the eval harness (recall@k/MRR **vs** groundedness+citation-accuracy).
+  - **[x] Conditional/agentic retrieval — delivered by `ep-rag-mcp`:** the problem was
+    always-on RAG. RAG-*as-a-model* ran the retrieve loop **unconditionally** on every query with
+    no relevance gate (by design: the index is anisotropic, so we "don't threshold raw cosine"),
+    so off-topic questions still paid embed+search+~2k-token prefill before the grounding prompt
+    made the model answer "I don't know" — mitigated only by the model picker. `ep-rag-mcp` is
+    the router that closes this: `/route` tree-classifies each turn before retrieving, and the
+    same service exposes retrieval as an MCP tool an agent calls only when it needs it — the
+    design's "tool-calling later" evolution, arrived at.
   - **Run:** `cd rag && make pipeline` (qdrant-up → fetch → ingest → index) · `make parity` ·
-    `make serve` (rag-server, OpenAI-compatible RAG on `:8081`) · drills/notebook in Emacs
+    `make serve-mcp` (ep-rag-mcp: MCP tool + `/retrieve` + `/route` on `:8082`) · drills/notebook in Emacs
     (`llms_kernel`) or `uv run --project drills python drills/…`.
   - [ ] org documents (my knowledge db) — later, same pipeline.
 - [ ] Base model change. Hardware is too weak for coding specific model, a generalist geared

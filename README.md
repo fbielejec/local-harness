@@ -316,7 +316,7 @@ Rust) · generator = the loopback `llama-server` (`:8080/v1`). One code path, tw
 ```bash
 make pipeline        # qdrant-up → fetch → ingest → index   (12 PDFs → 490 chunks → Qdrant)
 make parity          # candle vs sentence-transformers embed parity gate (cosine 1.0)
-make serve           # rag-server: OpenAI-compatible RAG endpoint on loopback :8081
+make serve-mcp       # ep-rag-mcp: MCP search tool + /retrieve + /route on loopback :8082
 make qdrant-status   # collection point count · make help for all targets
 ```
 
@@ -339,18 +339,18 @@ Stop later: `pkill -f "ssh -fN -L 16333"`.
   `retrieve`/`generate` crates.
 - **Drill 0 (index health)** — `rag/drills/drill0_index_health.org`: integrity, separation
   (anisotropic cone, mean cosine 0.68), near-dups, self-retrieval probe.
-- **`rag-server` crates built (2026-07-11)** — the notebook productized into three workspace
-  crates: `ep-rag-retrieve` (bge query-prefix embed → Qdrant gRPC top-k), `ep-rag-generate`
+- **`retrieve`/`generate` crates built (2026-07-11)** — the notebook productized into workspace
+  crates: `ep-rag-retrieve` (bge query-prefix embed → Qdrant gRPC top-k) and `ep-rag-generate`
   (grounded `assemble`, `<think>` strip, serve-time provenance/Sources join, UTF-8-safe streaming +
-  non-streaming llama-server client), and `ep-rag-server` (axum, OpenAI-compatible `/v1/models` +
-  `/v1/chat/completions` streaming & not, **startup live-vs-stored contract assert**, warm-on-boot).
-  30 unit tests green, warning-free; spec + code-quality reviewed. `make serve` → `:8081`. **Not yet
-  deployed / run end-to-end** — that's the deploy phase. On branch `rag-server`. Plan:
-  `docs/plans/2026-07-11-rag-server-implementation-plan.md`.
+  non-streaming llama-server client). Both are what `ep-rag-mcp` is built on.
+- **`ep-rag-server` removed (2026-09-03)** — an OpenAI-compatible RAG face on `:8081`, built but
+  never deployed. Its purpose was to be Open WebUI's second model; what actually shipped instead
+  was the `/route` filter calling `ep-rag-mcp`, which reaches the same goal through the service
+  that was already running. Rather than keep a second, unproven front door to the same index, the
+  crate and its unit file are deleted — recoverable from git, and the plan that produced it stays
+  in `docs/plans/` as the record.
 - **Next** — the two named debugging drills (embedding-mismatch, confidence-blind fusion) + eval
-  harness; then **deploy**: snapshot-migrate the index to weebeastie, run `rag-server` there as a
-  systemd unit, register it as Open WebUI's second model
-  (`docs/plans/2026-07-11-openwebui-rag-integration-design.md`).
+  harness.
 
 # Remote access (WireGuard) — 2026-07-16
 
@@ -435,8 +435,8 @@ keys. See the warning at the top of `CLAUDE.md`.
 - `docs/autoperf-reports/2026-07-06-autoperf-report.md` — tuning results (every config tried).
 - `evals/` — the coding-quality gate · `results.tsv` — raw per-config numbers.
 - `docs/plans/2026-07-10-ep-committee-rag-design.md` — EP-committee RAG design + status.
-- `docs/plans/2026-07-11-openwebui-rag-integration-design.md` — wiring the RAG behind Open WebUI (design; crates built, deploy pending).
-- `docs/plans/2026-07-11-rag-server-implementation-plan.md` — the `rag-server` build plan (Phases 0–3 done, Phase 4 deploy pending).
+- `docs/plans/2026-07-11-openwebui-rag-integration-design.md` — wiring the RAG behind Open WebUI (superseded: shipped as the `/route` filter against `ep-rag-mcp`).
+- `docs/plans/2026-07-11-rag-server-implementation-plan.md` — the `rag-server` build plan (historical; the service was removed 2026-09-03).
 - `docs/plans/2026-07-08-lan-chat-frontend-openwebui-design.md` — the Open WebUI chat frontend.
 - `docs/plans/2026-07-16-remote-model-access-design.md` — remote access via WireGuard (design + rejected alternatives).
 - `docs/plans/2026-07-16-remote-model-access-implementation-plan.md` — the 13-task WireGuard build plan.
