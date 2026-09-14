@@ -53,6 +53,13 @@ services:
       # Enable later via the admin panel (Documents) or by flipping these keys + re-seeding.
       - RAG_EMBEDDING_ENGINE=openai
       - BYPASS_EMBEDDING_AND_RETRIEVAL=true
+      # The bypass above covers document uploads ONLY. The built-in `query_knowledge_bases`
+      # tool calls the embedder directly, and RAG_OPENAI_API_BASE_URL upstream is hardcoded to
+      # https://api.openai.com/v1 — on 2026-09-14 a chat's query text went there (401, empty
+      # key, but the text left the LAN). Point it at loopback: llama-server has no /embeddings,
+      # so any stray embed call now fails inside the house. Also untick Builtin Tools →
+      # Knowledge on the model (Admin Panel); our RAG is the Query Router filter, not this.
+      - RAG_OPENAI_API_BASE_URL=http://localhost:8080/v1
 
       # --- web search via Exa (a deliberate, consented LAN-exit) ---
       - ENABLE_WEB_SEARCH=true

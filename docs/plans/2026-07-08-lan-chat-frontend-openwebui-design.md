@@ -88,7 +88,15 @@ Key groups:
   char-budget injection ⇒ **no embedder needed**).
 - **Document RAG off:** `RAG_EMBEDDING_ENGINE=openai` (external engine ⇒ no local
   SentenceTransformers model loaded at startup, so nothing is downloaded),
-  `BYPASS_EMBEDDING_AND_RETRIEVAL=true`.
+  `BYPASS_EMBEDDING_AND_RETRIEVAL=true`, **`RAG_OPENAI_API_BASE_URL=http://localhost:8080/v1`**.
+  ⚠️ *Added 2026-09-14 — the original seed leaked.* The bypass flag covers document uploads
+  only; the v0.10 built-in `query_knowledge_bases` tool calls the embedder directly, and the
+  embedder's base URL is hardcoded upstream to `https://api.openai.com/v1` (it does NOT inherit
+  `OPENAI_API_BASE_URL`). Qwen called that tool mid-chat and the query text went to OpenAI
+  (rejected 401 — empty key — but it left the LAN). Loopback makes any stray embed call fail
+  locally. Belt and braces: the model's **Builtin Tools → Knowledge** is unticked, since
+  Open WebUI's own Knowledge store is empty — our RAG is the Query Router filter
+  (`functions/ep_rag_router_filter.py` → `rag-mcp /route`), which the model never sees as a tool.
 - **Web search (Exa):** `ENABLE_WEB_SEARCH=true`, `WEB_SEARCH_ENGINE=exa`,
   `EXA_API_KEY=${...}`, `BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL=true` (full-content
   injection ⇒ still no embedder), `WEB_SEARCH_RESULT_COUNT=3`,
