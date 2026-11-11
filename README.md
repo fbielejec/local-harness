@@ -332,12 +332,16 @@ Compose service on weebeastie — `restart: unless-stopped` + docker `enabled` a
 reboots. Full rationale: `docs/plans/2026-07-08-lan-chat-frontend-openwebui-design.md`.
 
 **Version-controlled config:** `deploy/openwebui/docker-compose.yml` (+ `.env.example`). Secrets
-live in a gitignored `deploy/openwebui/.env` (`WEBUI_SECRET_KEY`, `EXA_API_KEY`). Pinned image
+live in a gitignored `deploy/openwebui/.env` (`WEBUI_SECRET_KEY`, `EXA_API_KEY`, `DEEPSEEK_API_KEY`). Pinned image
 `ghcr.io/open-webui/open-webui:v0.10.2`. Key config: host networking (to reach loopback model),
 `PORT=3000`, fixed accounts w/ signup locked, per-user memory on, document-RAG **off** (no
-embedder downloaded — `RAG_EMBEDDING_ENGINE=openai` + bypass), Exa web search on (with
-per-query confirmation), telemetry/version-check/community-sharing off, `cap_drop: [ALL]` +
+embedder downloaded — `RAG_EMBEDDING_ENGINE=openai` + bypass), Exa web search on (browser
+confirmation once per chat), telemetry/version-check/community-sharing off, `cap_drop: [ALL]` +
 `no-new-privileges`.
+
+**Per-chat switches (Integrations menu, all off by default):** *Web Search* (Exa) · *DeepSeek
+Search* (toggle Filter, `deploy/openwebui/functions/deepseek_search_filter.py`; sends each message
+to a service in China while on) · *Code Interpreter* (pyodide, runs in the browser).
 
 **Deploy / ops (on weebeastie, from `~/openwebui/`):**
 ```bash

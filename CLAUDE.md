@@ -146,13 +146,49 @@ docker compose pull && docker compose up -d   # update after bumping the pinned 
   via `localhost:8080` and exposes port 3000 to the LAN. The model stays private; only the UI
   is on the network.
 - **Document RAG is off** (no embedder downloaded — `RAG_EMBEDDING_ENGINE=openai` + bypass).
-  Enable later via the Admin Panel (Documents). Web search (Exa) is on, with per-query consent.
+  Enable later via the Admin Panel (Documents).
+- **Three per-chat switches (Integrations menu, all off in new chats, all accounts)** — added
+  2026-11-09: *Web Search* = Exa (built-in engine) · *DeepSeek Search* = toggle Filter
+  `deploy/openwebui/functions/deepseek_search_filter.py` (DB id `deepseek_search`, Active +
+  Global; key via `DEEPSEEK_API_KEY` env, not a ConfigVar) · *Code Interpreter* = pyodide (runs in
+  the user's browser). Exa's consent prompt fires **once per chat, browser-side only** — not per
+  query, and the server never enforces it.
+- **Functions are installed over the API**, not by hand:
+  `python3 deploy/openwebui/install_function.py <file> <id>` — create-or-update, then Active +
+  Global (stdlib only; name/description from the file's frontmatter). Under the hood:
+  `/api/v1/functions/create` or `/id/<id>/update`, then `/id/<id>/toggle` and `/toggle/global`,
+  which **flip** the stored value (the script reads state first). Auth = `OPENWEBUI_API_KEY`
+  (an **admin** key) in the repo's `deploy/openwebui/.env`. Live ids: `deepseek_search`,
+  `query_router` (from `ep_rag_router_filter.py`; live copy differs only cosmetically, and a
+  reinstall would rename it "EP RAG Router" from the file's title).
+- ⚠️ **The two `.env` files are different, never copy one over the other.** `~/openwebui/.env`
+  (deployed) holds `WEBUI_SECRET_KEY`; the repo's `deploy/openwebui/.env` holds
+  `OPENWEBUI_API_KEY` and lacks the secret key. Both carry `EXA_API_KEY` + `DEEPSEEK_API_KEY`.
 - **Per-user memory** is on; separate accounts ⇒ separate memories (agentic memory is
   model-dependent and may be flaky on Qwen; manual memory is reliable).
 - ⚠️ **ConfigVar caveat:** the compose env only *seeds first boot*. After that the `open-webui`
   volume is authoritative — change settings in the Admin Panel (or wipe the volume to re-seed).
 
 ## Key findings so far (don't relearn these)
+
+- **Run `hostname` first — the repo is also checked out ON weebeastie** (`~/CloudStation/LLMs/
+  local-harness`), so "laptop (this machine)" above may be wrong for your session. On 2026-11-09
+  an agent spent a turn on `ssh filip@192.168.1.22` failing host-key verification (that box has
+  no known_hosts entry for itself) before noticing it was already on the server. When local,
+  run `docker`/`systemctl` directly.
+- **Open WebUI: one built-in web-search engine, global** (`WEB_SEARCH_ENGINE`, not per user or
+  model; even `external` *replaces* Exa). A second provider must be a Tool or a Filter. Chose a
+  **toggle Filter** for DeepSeek: it gets its own switch beside Web Search and runs
+  deterministically, whereas a Tool depends on Qwen choosing to call it (the 2026-07 spike saw
+  over-firing). Never name a Tool `search_web` — it silently hides the built-in.
+- **Filters that inject context append to the last user message**, not a leading system
+  message: changing the start of the prompt invalidates llama-server's warm KV cache (one slot,
+  `--parallel 1`) and re-prefills the whole chat.
+- **DeepSeek Search `summary` is ~3,600 chars per result** (measured 2026-11-09), not the
+  documented 600–800 — the filter caps each at 1,000. Query limit is 128 chars (truncated).
+  The privacy terms: PRC storage + PRC law, inputs kept for the account's lifetime.
+- **Open WebUI fetches Exa's result pages itself, from the home IP** — live
+  `web.search.bypass_web_loader` is `false`. The DeepSeek filter does not fetch pages.
 
 - **`rag-mcp` reads `data/route_tree.json` AND `data/manifest.jsonl` before it binds a port,**
   relative to its `WorkingDirectory`. Only the route tree used to be tracked, so when the
@@ -475,6 +511,15 @@ Running list of follow-ups (check off as done; newest at the bottom).
   - Context: `deploy/openwebui/` · `docs/plans/2026-07-08-lan-chat-frontend-openwebui-design.md`
     · remote-access work above (`wg0`, deSEC updater) · `~/CloudStation/DevOps/nodrama/`
     (AWS footprint; its `docs/BACKLOG-INFRA.md` should get a pointer once this is decided).
+- [~] **Open WebUI search + sandbox switches** (2026-11-09). DeepSeek Search filter installed,
+  Code Interpreter on, compose + `.env` deployed (see *Operating the chat frontend*).
+  - [ ] **Verify in the browser:** the DeepSeek switch row, its status line and citation cards
+    (only unit tests + one live API call so far; no test chat, to keep the KV cache warm).
+  - Renaming the "Web Search" label was considered and dropped (2026-11-11): no setting exists,
+    the string is compiled into 20+ frontend chunks.
+  - [ ] Decide on `bypass_web_loader` (stops the home-IP fetches, but Exa snippets are thinner).
+  - [ ] Revoke `OPENWEBUI_API_KEY` if an admin key at rest isn't wanted.
+  - [ ] Check whether pyodide code can reach the network from the browser.
 
 ## Docs
 

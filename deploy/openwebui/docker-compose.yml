@@ -67,7 +67,15 @@ services:
       - EXA_API_KEY=${EXA_API_KEY:-}          # set in .env; empty just means web search is inert
       - BYPASS_WEB_SEARCH_EMBEDDING_AND_RETRIEVAL=true   # full-content injection, no embedder
       - WEB_SEARCH_RESULT_COUNT=3                        # keep within the 32k ctx window
-      - ENABLE_WEB_SEARCH_CONFIRMATION=true              # explicit consent before each query
+      - ENABLE_WEB_SEARCH_CONFIRMATION=true              # browser prompt once per chat when switched on
+
+      # --- second web search: DeepSeek, its own per-chat switch (functions/deepseek_search_filter.py) ---
+      # Read straight from the environment, not a ConfigVar, so re-upping the container applies it.
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:-}
+
+      # --- code sandbox: per-chat switch; pyodide runs the code in the user's browser, not here ---
+      - ENABLE_CODE_INTERPRETER=true
+      - CODE_INTERPRETER_ENGINE=pyodide
 
       # --- nothing else leaves the LAN ---
       - ENABLE_VERSION_UPDATE_CHECK=false   # no GitHub version ping
