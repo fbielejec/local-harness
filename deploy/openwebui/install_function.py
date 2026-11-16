@@ -9,44 +9,14 @@ Name and description come from the file's frontmatter (`title:`, `description:`)
 Auth: OPENWEBUI_API_KEY (an admin key) from the environment, else from the `.env` beside this
 script. OPENWEBUI_URL overrides the default http://localhost:3000. Standard library only.
 """
-import json
-import os
-import re
 import sys
-import urllib.error
-import urllib.request
 from pathlib import Path
 
-
-def api_key() -> str:
-    if key := os.environ.get("OPENWEBUI_API_KEY"):
-        return key
-    env_file = Path(__file__).with_name(".env")
-    if env_file.exists():
-        for line in env_file.read_text().splitlines():
-            if line.startswith("OPENWEBUI_API_KEY="):
-                return line.split("=", 1)[1].strip()
-    sys.exit("OPENWEBUI_API_KEY not set and not found in deploy/openwebui/.env")
-
-
-def frontmatter(content: str, field: str) -> str:
-    match = re.search(rf"^{field}:\s*(.+)$", content, re.MULTILINE)
-    return match.group(1).strip() if match else ""
+import owui
 
 
 def call(method: str, path: str, body: dict | None = None) -> tuple[int, dict | None]:
-    base = os.environ.get("OPENWEBUI_URL", "http://localhost:3000")
-    request = urllib.request.Request(
-        f"{base}/api/v1/functions{path}",
-        method=method,
-        data=json.dumps(body).encode() if body is not None else None,
-        headers={"Authorization": f"Bearer {api_key()}", "Content-Type": "application/json"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            return response.status, json.loads(response.read() or "null")
-    except urllib.error.HTTPError as error:
-        return error.code, json.loads(error.read() or "null")
+    return owui.call(method, f"/api/v1/functions{path}", body)
 
 
 def main() -> None:
@@ -56,9 +26,9 @@ def main() -> None:
     content = path.read_text()
     form = {
         "id": function_id,
-        "name": frontmatter(content, "title") or function_id,
+        "name": owui.frontmatter(content, "title") or function_id,
         "content": content,
-        "meta": {"description": frontmatter(content, "description"), "manifest": {}},
+        "meta": {"description": owui.frontmatter(content, "description"), "manifest": {}},
     }
 
     # A missing function answers 401, not 404.

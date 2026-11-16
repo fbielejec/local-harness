@@ -367,6 +367,25 @@ Calling* if you ever need to inspect it.
 afterwards the volume is authoritative, so change settings in the Admin Panel (or wipe the
 `open-webui` volume to re-seed).
 
+## Interior Designer model — 2026-11-16
+
+A second entry in the model menu, for every account (guests too): upload a room photo, say what
+you want, get a design concept and a render of the room restyled. **Runs on OpenAI**
+(`gpt-5.4-mini` designs, `gpt-image-1.5` renders) — the photos and that chat leave the house;
+nothing else does. Design: `docs/plans/2026-11-16-interior-designer-openwebui-design.md`.
+
+```bash
+# on weebeastie, with OPENAI_API_KEY + OPENWEBUI_API_KEY in deploy/openwebui/.env
+make install-designer     # connection + skill + render_design tool + preset; safe to re-run
+make test-openwebui       # tool unit tests, run inside the container (it has their deps)
+```
+
+Smoke-tested 2026-11-16 through the browser's code path (stored chat, uploaded photo): the
+designer called `render_design` on the photo (~25 s for reply + render), then a follow-up
+("make the sofa sage green, linen curtains") edited **the first render**, changing only those two
+things. Tune cost in Workspace → Tools → Render Design → Valves (`quality`, `daily_renders_per_user`).
+⚠️ Set a **monthly spend limit** on the OpenAI project — the daily cap resets on container restart.
+
 # EP-Committee RAG — 2026-07-11
 
 A grounded, cited Q&A assistant over EMPL/REGI/IMCO committee PDFs. 
@@ -502,5 +521,6 @@ keys. See the warning at the top of `CLAUDE.md`.
 - `docs/plans/2026-07-11-openwebui-rag-integration-design.md` — wiring the RAG behind Open WebUI (superseded: shipped as the `/route` filter against `rag-mcp`).
 - `docs/plans/2026-07-11-rag-server-implementation-plan.md` — the `rag-server` build plan (historical; the service was removed 2026-09-03).
 - `docs/plans/2026-07-08-lan-chat-frontend-openwebui-design.md` — the Open WebUI chat frontend.
+- `docs/plans/2026-11-16-interior-designer-openwebui-design.md` — the Interior Designer model (OpenAI).
 - `docs/plans/2026-07-16-remote-model-access-design.md` — remote access via WireGuard (design + rejected alternatives).
 - `docs/plans/2026-07-16-remote-model-access-implementation-plan.md` — the 13-task WireGuard build plan.

@@ -122,6 +122,15 @@ restart-server:
 install-server: build-llama fetch-model build-rag deploy-units
 	@echo "install-server complete. Nothing was restarted — 'make restart-server' when ready."
 
+.PHONY: install-designer # [server] install/update the Interior Designer model in Open WebUI (OpenAI; needs OPENAI_API_KEY in deploy/openwebui/.env)
+install-designer:
+	python3 deploy/openwebui/install_interior_designer.py
+
+.PHONY: test-openwebui # [server] unit-test the Open WebUI tools inside the running container (it has their deps)
+test-openwebui:
+	cd deploy/openwebui && tar c tools tests | docker exec -i open-webui sh -c \
+	  'd=$$(mktemp -d) && tar x --no-same-owner -C $$d && cd $$d && python -m unittest discover -s tests; s=$$?; rm -rf $$d; exit $$s'
+
 .PHONY: install-tools # [server] put the pipeline binaries (ingest, index, parse, embed, fetch) on PATH
 install-tools:
 	bash deploy/install/build-tools.sh

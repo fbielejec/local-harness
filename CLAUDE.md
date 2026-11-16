@@ -164,6 +164,12 @@ docker compose pull && docker compose up -d   # update after bumping the pinned 
 - ⚠️ **The two `.env` files are different, never copy one over the other.** `~/openwebui/.env`
   (deployed) holds `WEBUI_SECRET_KEY`; the repo's `deploy/openwebui/.env` holds
   `OPENWEBUI_API_KEY` and lacks the secret key. Both carry `EXA_API_KEY` + `DEEPSEEK_API_KEY`.
+- **Interior Designer** (2026-11-16) — a model-menu preset for all accounts: `gpt-5.4-mini`
+  (2nd OpenAI connection, allow-listed) + skill `interior-design` + custom tool `render_design`
+  (`gpt-image-1.5`, key in its valves). Install/update: `make install-designer`; tests:
+  `make test-openwebui`. Sources in `deploy/openwebui/{skills,tools,models}/`. Design:
+  `docs/plans/2026-11-16-interior-designer-openwebui-design.md`. **Global image generation stays
+  off** on purpose — the tool doesn't need it, so Qwen chats get no image switch.
 - **Per-user memory** is on; separate accounts ⇒ separate memories (agentic memory is
   model-dependent and may be flaky on Qwen; manual memory is reliable).
 - ⚠️ **ConfigVar caveat:** the compose env only *seeds first boot*. After that the `open-webui`
@@ -189,6 +195,23 @@ docker compose pull && docker compose up -d   # update after bumping the pinned 
   The privacy terms: PRC storage + PRC law, inputs kept for the account's lifetime.
 - **Open WebUI fetches Exa's result pages itself, from the home IP** — live
   `web.search.bypass_web_loader` is `false`. The DeepSeek filter does not fetch pages.
+- **Open WebUI's built-in image tools can't restyle an uploaded photo** (v0.10.2). Legacy mode
+  sends the raw user message as the edit prompt; native `edit_image(prompt, image_urls)` needs a
+  URL, but uploads reach the model as inline base64 — it has none to pass. Hence the custom
+  `render_design` tool, which finds the image in the stored chat history itself.
+- **A cloud-model preset must switch off built-ins:** `capabilities.builtin_tools: false` +
+  `memory: false`. The defaults hand a native-FC model `search_chats`/`view_chat`, notes and
+  memory tools and inject memories — an OpenAI model could read local Qwen chats. With built-ins
+  off, an attached skill is also inlined in full rather than offered via `view_skill`.
+- **A raw model with no DB entry is admin-only** in v0.10.2; users see a model only through a
+  grant. Note Qwen's grants are per *user*, so a newly made account sees the Interior Designer
+  (public `user:*` grant) but not Qwen until granted.
+- **Testing chats over the API:** a bare `/api/chat/completions` (no `chat_id`) streams tool
+  calls back *unexecuted*. To run tools, do what the browser does: `parent_id: null`,
+  `user_message` with `files: [{type: image, id, url: <file id>}]`, `id` (assistant id),
+  `session_id` → server creates the chat; read the reply from the message's `output` items
+  (`content` stays empty for tool-using turns). The image `url` must be the **bare file id** — a
+  `/api/v1/files/<id>/content` path is not resolved and reaches OpenAI as a dead URL.
 
 - **`rag-mcp` reads `data/route_tree.json` AND `data/manifest.jsonl` before it binds a port,**
   relative to its `WorkingDirectory`. Only the route tree used to be tracked, so when the
@@ -520,6 +543,15 @@ Running list of follow-ups (check off as done; newest at the bottom).
   - [ ] Decide on `bypass_web_loader` (stops the home-IP fetches, but Exa snippets are thinner).
   - [ ] Revoke `OPENWEBUI_API_KEY` if an admin key at rest isn't wanted.
   - [ ] Check whether pyodide code can reach the network from the browser.
+- [~] **Interior Designer** (2026-11-16) — installed and smoke-tested over the API (photo →
+  render → follow-up edit of the render). See *Operating the chat frontend*.
+  - [ ] **Set a monthly spend limit** on the OpenAI project (the only hard cost cap).
+  - [ ] Verify in the browser as a non-admin (spouse/guest): menu shows it, upload + render,
+    image appears inline.
+  - [ ] The designer tends to render before presenting the concept; tune the system prompt if
+    the text-first order matters.
+  - [ ] Try `gpt-image-2` / `input_fidelity=high` (tool valves) against `gpt-image-1.5`.
+  - [ ] Check the current OpenAI API data-retention terms (design doc, Privacy).
 
 ## Docs
 
