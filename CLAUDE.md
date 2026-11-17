@@ -164,8 +164,9 @@ docker compose pull && docker compose up -d   # update after bumping the pinned 
 - ⚠️ **The two `.env` files are different, never copy one over the other.** `~/openwebui/.env`
   (deployed) holds `WEBUI_SECRET_KEY`; the repo's `deploy/openwebui/.env` holds
   `OPENWEBUI_API_KEY` and lacks the secret key. Both carry `EXA_API_KEY` + `DEEPSEEK_API_KEY`.
-- **Interior Designer** (2026-11-16) — a model-menu preset for all accounts: `gpt-5.4-mini`
-  (2nd OpenAI connection, allow-listed) + skill `interior-design` + custom tool `render_design`
+- **Interior Designer** (2026-11-16) — a model-menu preset for all accounts: `gpt-5.6-sol`
+  (2nd OpenAI connection, allow-listed, **Responses API** — sol rejects tools+reasoning on
+  `/chat/completions`) + skill `interior-design` + custom tool `render_design`
   (`gpt-image-1.5`, key in its valves). Install/update: `make install-designer`; tests:
   `make test-openwebui`. Sources in `deploy/openwebui/{skills,tools,models}/`. Design:
   `docs/plans/2026-11-16-interior-designer-openwebui-design.md`. **Global image generation stays
@@ -548,8 +549,6 @@ Running list of follow-ups (check off as done; newest at the bottom).
   - [ ] **Set a monthly spend limit** on the OpenAI project (the only hard cost cap).
   - [ ] Verify in the browser as a non-admin (spouse/guest): menu shows it, upload + render,
     image appears inline.
-  - [ ] The designer tends to render before presenting the concept; tune the system prompt if
-    the text-first order matters.
   - [ ] Try `gpt-image-2` / `input_fidelity=high` (tool valves) against `gpt-image-1.5`.
   - [ ] Check the current OpenAI API data-retention terms (design doc, Privacy).
 

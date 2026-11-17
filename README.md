@@ -371,7 +371,7 @@ afterwards the volume is authoritative, so change settings in the Admin Panel (o
 
 A second entry in the model menu, for every account (guests too): upload a room photo, say what
 you want, get a design concept and a render of the room restyled. **Runs on OpenAI**
-(`gpt-5.4-mini` designs, `gpt-image-1.5` renders) — the photos and that chat leave the house;
+(`gpt-5.6-sol` designs, `gpt-image-1.5` renders) — the photos and that chat leave the house;
 nothing else does. Design: `docs/plans/2026-11-16-interior-designer-openwebui-design.md`.
 
 ```bash

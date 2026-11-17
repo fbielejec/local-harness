@@ -4,7 +4,7 @@
 Usage:  python3 deploy/openwebui/install_interior_designer.py     (or: make install-designer)
 
 Four steps, each create-or-update:
-  1. the OpenAI connection, allow-listed to the designer model so the raw model list stays short
+  1. the OpenAI connection (Responses API), allow-listed to exactly the designer model
   2. the `interior-design` skill   (skills/interior-design.md)
   3. the `render_design` tool      (tools/render_design.py), with OPENAI_API_KEY in its valves
   4. the `interior-designer` model (models/interior-designer.json)
@@ -50,13 +50,15 @@ def ensure_connection(model_id: str, api_key: str) -> None:
         index = len(urls)
         urls.append(OPENAI_URL)
         keys.append(api_key)
-    entry = configs.get(str(index), {})
-    allowed = entry.get("model_ids") or []
     configs[str(index)] = {
-        **entry,
+        **configs.get(str(index), {}),
         "enable": True,
         "connection_type": "external",
-        "model_ids": allowed if model_id in allowed else [*allowed, model_id],
+        # This connection exists for the designer alone: exactly its model, so a model switch
+        # does not leave the previous one behind in the admin menu.
+        "model_ids": [model_id],
+        # gpt-5.6-* reject function tools with reasoning on /chat/completions; /responses takes both.
+        "api_type": "responses",
     }
     form = {
         "ENABLE_OPENAI_API": True,

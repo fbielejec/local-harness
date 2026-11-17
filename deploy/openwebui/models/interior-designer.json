@@ -1,7 +1,7 @@
 {
   "id": "interior-designer",
   "name": "Interior Designer",
-  "base_model_id": "gpt-5.4-mini",
+  "base_model_id": "gpt-5.6-sol",
   "meta": {
     "description": "Upload a photo of a room, say what you'd like, and get a design concept with a render of your room restyled. Runs on OpenAI: photos and this chat leave the house.",
     "capabilities": {
